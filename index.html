@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#ffffff">
+<title>미술대학 80주년 · College of Fine Arts 80th Anniversary</title>
+<meta name="description" content="10년의 기록,10년의 비전. A Decade Recorded, A Decade Envisioned.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%230099FF'/%3E%3Cpath d='M24 38V10M10 24l14-14 14 14' fill='none' stroke='white' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css"><script src="core.js" defer></script><script src="app.js" defer></script>
+</head>
+<body><main>
+<section id="landing" aria-label="미술대학 80주년 / College of Fine Arts 80th Anniversary">
+<button id="enter" type="button" aria-label="궤적만들기로 이동 / Continue to Create trajectories">
+<span class="landing-copy"><span class="landing-ko">미술대학 80주년<br>10년의 기록,10년의 비전</span><span class="landing-en" lang="en">College of Fine Arts 80th Anniversary,<br>A Decade Recorded, A Decade Envisioned</span></span>
+</button></section>
+<section id="maker" hidden aria-labelledby="maker-title">
+<header><h1 id="maker-title" tabindex="-1">궤적만들기<span lang="en">Create trajectories</span></h1><p>참여형 그래픽 실험<span lang="en">Participatory graphic experiment</span></p></header>
+<div class="experiment">
+<div id="output" hidden><svg id="arrows" viewBox="0 0 420 360" role="img" aria-label="생성된 궤적 / Generated trajectories"></svg></div>
+<div class="input-actions"><button id="take-photo" type="button">사진 촬영<span lang="en">Take a photo</span></button><button id="choose-photo" type="button">사진 선택<span lang="en">Choose a photo</span></button></div>
+<input id="camera-file" type="file" accept="image/*" capture="environment" hidden><input id="library-file" type="file" accept="image/*" hidden>
+<p id="status" class="sr-only" role="status" aria-live="polite"></p><p id="error" role="alert" hidden></p>
+<button id="save-png" type="button" hidden>다운로드<span lang="en">Download</span></button>
+</div>
+<footer><p>서울대학교 미술대학 80주년<span lang="en">SNU College of Fine Arts 80th Anniversary</span></p><p>Chris Hamamoto<br>이정아 <span lang="en" class="inline">Jungah Lee</span><br>김연주 <span lang="en" class="inline">Yeonjoo Kim</span></p><div class="credit-links"><span>학교 이메일 <span lang="en" class="inline">/ School email</span></span><a href="https://art.snu.ac.kr/" target="_blank" rel="noopener noreferrer">학교 홈페이지 <span lang="en" class="inline">/ School website</span></a></div></footer>
+</section>
+</main></body></html>
