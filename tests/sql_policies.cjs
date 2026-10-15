@@ -47,6 +47,12 @@ before(async () => {
   );
   await db.exec(setup);
   await db.exec(setup);
+  const archive = fs.readFileSync(
+    path.join(__dirname, "../supabase/archive.sql"),
+    "utf8",
+  );
+  await db.exec(archive);
+  await db.exec(archive);
   for (const [id, ready] of [
     [ID, true],
     [DRAFT, false],
@@ -190,5 +196,73 @@ test("storage inserts and retries stay in the owner folder and use approved file
       "update storage.objects set name=$1 where name=$2",
       [`${OTHER}/${ID}/photo.jpg`, own],
     ),
+  );
+});
+
+test("public archive returns only completed photo/trajectory pairs, not owner or poster fields", async () => {
+  const { rows } = await role(
+    "anon",
+    null,
+    "select * from public.list_trajectories(0,7)",
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, ID);
+  assert.deepEqual(
+    Object.keys(rows[0]).sort(),
+    ["id", "captured_at", "photo_path", "arrows_path"].sort(),
+  );
+  await assert.rejects(() =>
+    role("anon", null, "select * from public.creations"),
+  );
+});
+test("archive pagination is deterministic and request sizes are bounded", async () => {
+  for (let n = 10; n < 40; n++) {
+    const id = `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+    await db.query(
+      `insert into public.creations(id,owner_id,captured_at,ready,photo_path,arrows_path,poster_path)
+   values($1,$2,$3,true,$4,$5,$6)`,
+      [
+        id,
+        OWNER,
+        `2026-10-15T00:00:${String(n).padStart(2, "0")}Z`,
+        ...["photo.jpg", "arrows.png", "poster.png"].map(
+          (f) => `${OWNER}/${id}/${f}`,
+        ),
+      ],
+    );
+  }
+  const a = (
+    await role("anon", null, "select * from public.list_trajectories(0,6)")
+  ).rows;
+  const b = (
+    await role("anon", null, "select * from public.list_trajectories(6,6)")
+  ).rows;
+  assert.equal(a.length, 6);
+  assert.equal(b.length, 6);
+  assert(a.every((row) => !b.some((other) => row.id === other.id)));
+  assert.equal(
+    (await role("anon", null, "select * from public.list_trajectories(-10,1)"))
+      .rows[0].id,
+    a[0].id,
+  );
+  assert.equal(
+    (
+      await role(
+        "anon",
+        null,
+        "select * from public.list_trajectories(0,10000)",
+      )
+    ).rows.length,
+    25,
+  );
+  assert.equal(
+    (
+      await role(
+        "anon",
+        null,
+        "select * from public.list_trajectories(1000000,6)",
+      )
+    ).rows.length,
+    0,
   );
 });

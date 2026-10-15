@@ -43,6 +43,7 @@
   }
   function showError(message) {
     $("error-message").textContent = message;
+    $("retry-error-save").hidden = true;
     $("error").hidden = false;
   }
   function clearError() {
@@ -79,6 +80,7 @@
     return "rgb(" + composite(color).join(" ") + ")";
   }
   function colorButton(button, color) {
+    button.dataset.lastColor = color.hex;
     const rgb = color.hex
       .slice(1)
       .match(/../g)
@@ -94,6 +96,7 @@
     document
       .querySelectorAll(".color-button")
       .forEach((button, i) => colorButton(button, colors[i % colors.length]));
+    document.querySelectorAll(".back-button").forEach(paintInteraction);
   }
   function drawStripes() {
     $("stripe-field").replaceChildren(
@@ -104,6 +107,8 @@
         return stripe;
       }),
     );
+    $("take-photo").dataset.lastColor = stripeOrder[3].hex;
+    $("choose-photo").dataset.lastColor = stripeOrder[4].hex;
     $("take-photo").style.color = ink(stripeOrder[3]);
     $("choose-photo").style.color = ink(stripeOrder[4]);
   }
@@ -112,79 +117,165 @@
     drawStripes();
     randomizeButtons();
   }
-  let audioBuffer, audioDecoding, nextSound = 0;
-  const soundCues = [[.970,.075],[1.070,.075],[1.169,.075],[1.270,.085],[1.405,.085],[1.544,.085],[1.758,.085],[2.295,.085]];
-  const audioBytes = fetch("assets/audio/revolver-spin.mp3").then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
+  let audioBuffer,
+    audioDecoding,
+    nextSound = 0;
+  const soundCues = [
+    [0.97, 0.075],
+    [1.07, 0.075],
+    [1.169, 0.075],
+    [1.27, 0.085],
+    [1.405, 0.085],
+    [1.544, 0.085],
+    [1.758, 0.085],
+    [2.295, 0.085],
+  ];
+  const audioBytes = fetch("assets/audio/revolver-spin.mp3")
+    .then((r) => (r.ok ? r.arrayBuffer() : null))
+    .catch(() => null);
   function feedback() {
     if (performance.now() - lastFeedback < 70) return;
     lastFeedback = performance.now();
-    try { navigator.vibrate?.(18); } catch {}
+    try {
+      navigator.vibrate?.(18);
+    } catch {}
     try {
       const AudioCtor = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtor) return;
       audioContext ||= new AudioCtor();
-      if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
-      audioDecoding ||= audioBytes.then(bytes => bytes ? audioContext.decodeAudioData(bytes.slice(0)) : null).then(buffer => { audioBuffer = buffer; return buffer; }).catch(() => null);
-      const play = buffer => {
+      if (audioContext.state === "suspended")
+        audioContext.resume().catch(() => {});
+      audioDecoding ||= audioBytes
+        .then((bytes) =>
+          bytes ? audioContext.decodeAudioData(bytes.slice(0)) : null,
+        )
+        .then((buffer) => {
+          audioBuffer = buffer;
+          return buffer;
+        })
+        .catch(() => null);
+      const play = (buffer) => {
         if (!buffer) return;
-        const [offset,duration] = soundCues[nextSound++ % soundCues.length];
-        const source = audioContext.createBufferSource(), gain = audioContext.createGain(), now = audioContext.currentTime;
+        const [offset, duration] = soundCues[nextSound++ % soundCues.length];
+        const source = audioContext.createBufferSource(),
+          gain = audioContext.createGain(),
+          now = audioContext.currentTime;
         source.buffer = buffer;
-        gain.gain.setValueAtTime(0,now); gain.gain.linearRampToValueAtTime(.8,now+.002);
-        gain.gain.setValueAtTime(.8,now+duration-.01); gain.gain.linearRampToValueAtTime(0,now+duration);
-        source.connect(gain); gain.connect(audioContext.destination); source.start(now,offset,duration);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.8, now + 0.002);
+        gain.gain.setValueAtTime(0.8, now + duration - 0.01);
+        gain.gain.linearRampToValueAtTime(0, now + duration);
+        source.connect(gain);
+        gain.connect(audioContext.destination);
+        source.start(now, offset, duration);
       };
-      if (audioBuffer) play(audioBuffer); else void audioDecoding.then(play);
+      if (audioBuffer) play(audioBuffer);
+      else void audioDecoding.then(play);
     } catch {}
   }
   function differentColor(previous) {
-    const choices = palette.filter(color => color.hex !== previous);
+    const choices = palette.filter((color) => color.hex !== previous);
     return choices[Math.floor(Math.random() * choices.length)];
   }
   function paintInteraction(button) {
     const color = differentColor(button.dataset.lastColor);
     button.dataset.lastColor = color.hex;
-    if (button.id === "enter") { randomizeLanding(); return; }
+    if (button.id === "enter") {
+      randomizeLanding();
+      return;
+    }
     if (button.classList.contains("back-button")) {
-      button.style.color = `rgb(${color.hex.slice(1).match(/../g).map(v=>parseInt(v,16)).join(" ")} / ${color.opacity})`;
+      button.style.color = `rgb(${color.hex
+        .slice(1)
+        .match(/../g)
+        .map((v) => parseInt(v, 16))
+        .join(" ")} / ${color.opacity})`;
       return;
     }
     if (button.classList.contains("vertical-action")) {
-      stripeOrder[button.id === "take-photo" ? 3 : 4] = color; drawStripes(); return;
+      stripeOrder[button.id === "take-photo" ? 3 : 4] = color;
+      drawStripes();
+      return;
     }
-    colorButton(button,color);
+    colorButton(button, color);
     if (!button.classList.contains("archive-card")) {
       button.style.backgroundColor = "var(--button-color)";
       button.style.color = "var(--button-ink)";
     }
   }
   let heldButton = null;
-  document.addEventListener("pointerover",event=>{
-    const button=event.target.closest("button");
-    if (event.pointerType === "mouse" && button && !button.disabled && !button.contains(event.relatedTarget)) paintInteraction(button);
+  document.addEventListener("pointerover", (event) => {
+    const button = event.target.closest("button");
+    if (
+      event.pointerType === "mouse" &&
+      button &&
+      !button.disabled &&
+      !button.contains(event.relatedTarget)
+    )
+      paintInteraction(button);
   });
-  document.addEventListener("pointerdown",event=>{
-    const button=event.target.closest("button");
-    if (!button || button.disabled || event.button !== 0) return;
-    heldButton={button,id:event.pointerId,x:event.clientX,y:event.clientY,last:performance.now(),moved:false};
-    delete button.dataset.dragged; paintInteraction(button); feedback();
-  },true);
-  document.addEventListener("pointermove",event=>{
-    if (!heldButton || event.pointerId !== heldButton.id) return;
-    if (Math.hypot(event.clientX-heldButton.x,event.clientY-heldButton.y)>8) heldButton.moved=true;
-    if (heldButton.moved && performance.now()-heldButton.last>85) {
-      heldButton.last=performance.now();paintInteraction(heldButton.button);feedback();
-    }
-  },true);
-  for (const type of ["pointerup","pointercancel"]) document.addEventListener(type,()=>{
-    if (heldButton?.moved) heldButton.button.dataset.dragged="true";
-    heldButton=null;
-  },true);
-  document.addEventListener("click",event=>{
-    const button=event.target.closest("button");
-    if (button?.dataset.dragged === "true") {delete button.dataset.dragged;event.preventDefault();event.stopImmediatePropagation();return;}
-    if (button && event.detail === 0) {paintInteraction(button);feedback();}
-  },true);
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      const button = event.target.closest("button");
+      if (!button || button.disabled || event.button !== 0) return;
+      heldButton = {
+        button,
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        last: performance.now(),
+        moved: false,
+      };
+      delete button.dataset.dragged;
+      paintInteraction(button);
+      feedback();
+    },
+    true,
+  );
+  document.addEventListener(
+    "pointermove",
+    (event) => {
+      if (!heldButton || event.pointerId !== heldButton.id) return;
+      if (
+        Math.hypot(event.clientX - heldButton.x, event.clientY - heldButton.y) >
+        8
+      )
+        heldButton.moved = true;
+      if (heldButton.moved && performance.now() - heldButton.last > 85) {
+        heldButton.last = performance.now();
+        paintInteraction(heldButton.button);
+        feedback();
+      }
+    },
+    true,
+  );
+  for (const type of ["pointerup", "pointercancel"])
+    document.addEventListener(
+      type,
+      () => {
+        if (heldButton?.moved) heldButton.button.dataset.dragged = "true";
+        heldButton = null;
+      },
+      true,
+    );
+  document.addEventListener(
+    "click",
+    (event) => {
+      const button = event.target.closest("button");
+      if (button?.dataset.dragged === "true") {
+        delete button.dataset.dragged;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (button && event.detail === 0) {
+        paintInteraction(button);
+        feedback();
+      }
+    },
+    true,
+  );
 
   let pointer = null;
   $("stripe-field").addEventListener("pointerdown", (event) => {
@@ -210,31 +301,53 @@
     });
 
   function updateTimers() {
-    clearInterval(homeTimer);clearInterval(previewTimer);
+    clearInterval(homeTimer);
+    clearInterval(previewTimer);
     if (document.hidden) return;
-    if (state.screen === "home") homeTimer=setInterval(()=>{stripeOrder=shuffle(palette);drawStripes();},2000);
-    if (state.screen === "finish" && state.record && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      previewTimer=setInterval(()=>setPreview(state.preview === "arrows" ? "poster" : "arrows"),800);
+    if (state.screen === "home")
+      homeTimer = setInterval(() => {
+        stripeOrder = shuffle(palette);
+        drawStripes();
+      }, 2000);
+    if (
+      state.screen === "finish" &&
+      state.record &&
+      !matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      previewTimer = setInterval(
+        () => setPreview(state.preview === "arrows" ? "poster" : "arrows"),
+        800,
+      );
     }
   }
   function fitInfo() {
     if (state.screen !== "info") return;
-    const copy=document.querySelector(".info-copy");copy.style.fontSize="";
-    let size=parseFloat(getComputedStyle(copy).fontSize);
-    for (let i=0;i<6 && copy.scrollHeight>copy.clientHeight+1;i++) {
-      size*=Math.min(.97,copy.clientHeight/copy.scrollHeight);copy.style.fontSize=size+"px";
+    const copy = document.querySelector(".info-copy");
+    copy.style.fontSize = "";
+    let size = parseFloat(getComputedStyle(copy).fontSize);
+    for (let i = 0; i < 6 && copy.scrollHeight > copy.clientHeight + 1; i++) {
+      size *= Math.min(0.97, copy.clientHeight / copy.scrollHeight);
+      copy.style.fontSize = size + "px";
     }
   }
   function displayScreen(name) {
-    for (const id of screens) $(id).hidden=id!==name;
-    state.screen=name;$(name).setAttribute("tabindex","-1");$(name).focus({preventScroll:true});
+    for (const id of screens) $(id).hidden = id !== name;
+    state.screen = name;
+    $(name).setAttribute("tabindex", "-1");
+    $(name).focus({ preventScroll: true });
     if (name === "landing") randomizeLanding();
     if (name === "info") requestAnimationFrame(fitInfo);
     updateTimers();
   }
-  addEventListener("resize",fitInfo);document.fonts.ready.then(fitInfo);
-  document.addEventListener("visibilitychange",updateTimers);
+  addEventListener("resize", fitInfo);
+  document.fonts.ready.then(fitInfo);
+  document.addEventListener("visibilitychange", updateTimers);
+  matchMedia("(prefers-reduced-motion: reduce)").addEventListener(
+    "change",
+    updateTimers,
+  );
   function navigate(hash) {
+    clearError();
     if (location.hash === hash) route();
     else location.hash = hash;
   }
@@ -269,13 +382,18 @@
   }
   async function route() {
     recordSerial++;
+    gallerySerial++;
     if (state.busy && state.screen === "processing") {
       state.serial++;
       state.busy = false;
       clearInterval(processTimer);
     }
     const hash = location.hash;
-    if (hash === "#archive") {displayScreen("gallery");await loadGallery();return;}
+    if (hash === "#archive") {
+      displayScreen("gallery");
+      await loadGallery();
+      return;
+    }
     if (hash.startsWith("#result/")) {
       displayScreen("record");
       await loadRecord(hash.slice(8));
@@ -310,17 +428,28 @@
     .forEach((button) =>
       button.addEventListener("click", () => navigate("#home")),
     );
-  let landingSVGReady=false;
+  let landingSVGReady = false;
   function randomizeLanding() {
     if (!landingSVGReady) return;
-    const colors=shuffle(palette);
-    document.querySelectorAll("#landing-art .landing-arrow").forEach((path,i)=>{
-      path.setAttribute("fill",colors[i].hex);path.setAttribute("fill-opacity",colors[i].opacity);
-    });
+    const colors = shuffle(palette);
+    document
+      .querySelectorAll("#landing-art .landing-arrow")
+      .forEach((path, i) => {
+        path.setAttribute("fill", colors[i].hex);
+        path.setAttribute("fill-opacity", colors[i].opacity);
+      });
   }
-  const landingReady=fetch("assets/landing.svg").then(r=>{if(!r.ok)throw Error();return r.text();}).then(text=>{
-    $("landing-art").innerHTML=text;landingSVGReady=true;randomizeLanding();
-  }).catch(()=>{});
+  const landingReady = fetch("assets/landing.svg")
+    .then((r) => {
+      if (!r.ok) throw Error();
+      return r.text();
+    })
+    .then((text) => {
+      $("landing-art").innerHTML = text;
+      landingSVGReady = true;
+      randomizeLanding();
+    })
+    .catch(() => {});
   let infoSVG = "";
   const infoReady = fetch("assets/info-arrow.svg")
     .then((r) => {
@@ -355,16 +484,28 @@
   $("take-photo").addEventListener("click", () => $("camera-file").click());
   // No browser API can force the iOS native picker to bypass its source menu.
   // Prefer a supported image picker; retain a type=file fallback for mobile Safari.
-  $("choose-photo").addEventListener("click",async()=>{
+  $("choose-photo").addEventListener("click", async () => {
     if (typeof window.showOpenFilePicker === "function") {
       try {
-        const [handle]=await window.showOpenFilePicker({multiple:false,types:[{description:"사진",accept:{"image/*":[".jpg",".jpeg",".png",".webp",".avif",".heic"]}}]});
-        await selectPhoto(await handle.getFile());return;
-      } catch(error) {if(error.name === "AbortError") return;}
+        const [handle] = await window.showOpenFilePicker({
+          multiple: false,
+          types: [
+            {
+              description: "사진",
+              accept: {
+                "image/*": [".jpg", ".jpeg", ".png", ".webp", ".avif", ".heic"],
+              },
+            },
+          ],
+        });
+        await selectPhoto(await handle.getFile());
+        return;
+      } catch (error) {
+        if (error.name === "AbortError") return;
+      }
     }
     $("library-file").click();
   });
-
 
   function loadImage(source) {
     return new Promise((resolve, reject) => {
@@ -582,9 +723,16 @@
     try {
       const image = await loadImage(url),
         c = canvas(1206, 1560);
-      const ctx=c.getContext("2d");ctx.drawImage(image,0,0,1206,1560);
-      ctx.save();ctx.scale(3,3);ctx.translate(247,594-140);ctx.rotate(-Math.PI/6);
-      ctx.font='25px "Panchi Mono"';ctx.fillStyle="#4400FF";ctx.fillText(dateStamp(createdAt),0,0);ctx.restore();
+      const ctx = c.getContext("2d");
+      ctx.drawImage(image, 0, 0, 1206, 1560);
+      ctx.save();
+      ctx.scale(3, 3);
+      ctx.translate(247, 594 - 140);
+      ctx.rotate(-Math.PI / 6);
+      ctx.font = '25px "Panchi Mono"';
+      ctx.fillStyle = "#4400FF";
+      ctx.fillText(dateStamp(createdAt), 0, 0);
+      ctx.restore();
       return await toBlob(c);
     } finally {
       URL.revokeObjectURL(url);
@@ -597,7 +745,6 @@
       kind === "poster"
         ? "궤적, 날짜, 사진과 글자를 합친 완성 포스터"
         : "사진에서 생성한 궤적과 생성 날짜";
-
   }
   async function persist(record) {
     state.saveState = {
@@ -617,7 +764,11 @@
           "이 브라우저에 저장하지 못했어요. 다운로드로 이미지를 보관해 주세요.",
         );
     }
-    if (!archive.configured()) return;
+    if (!archive.configured()) {
+      if (state.screen === "gallery" && state.galleryPage === 0)
+        void loadGallery();
+      return;
+    }
     try {
       await archive.onlineSave(record);
       try {
@@ -627,13 +778,16 @@
         state.saveState.cloud = "saved";
         updateArchiveUI();
       }
+      if (state.screen === "gallery" && state.galleryPage === 0)
+        void loadGallery();
     } catch (error) {
       if (state.record?.id === record.id) {
         state.saveState.cloud = "failed";
         updateArchiveUI();
         showError(
-          "온라인 저장을 완료하지 못했어요. 결과 페이지에서 다시 시도할 수 있습니다.",
+          "온라인 저장을 완료하지 못했어요. 다시 시도하거나 다운로드로 보관해 주세요.",
         );
+        $("retry-error-save").hidden = false;
       }
     }
   }
@@ -782,50 +936,118 @@
   $("download-done").addEventListener("click", openCurrentRecord);
   $("open-record").addEventListener("click", openCurrentRecord);
   async function loadGallery() {
-    const serial=++gallerySerial;
-    $("gallery-status").textContent="궤적을 불러오고 있어요…";
-    $("gallery-grid").replaceChildren();$("gallery-prev").disabled=true;$("gallery-next").disabled=true;
-    state.galleryUrls.forEach(url=>URL.revokeObjectURL(url));state.galleryUrls=[];
+    const serial = ++gallerySerial;
+    $("gallery-status").textContent = "궤적을 불러오고 있어요…";
+    $("gallery-grid").replaceChildren();
+    $("gallery-prev").disabled = true;
+    $("gallery-next").disabled = true;
+    state.galleryUrls.forEach((url) => URL.revokeObjectURL(url));
+    state.galleryUrls = [];
     try {
-      let rows, hasMore=false;
+      let rows,
+        hasMore = false;
       if (archive.configured()) {
-        const result=await archive.onlineList(state.galleryPage*6,6);rows=result.items;hasMore=result.hasMore;
+        const result = await archive.onlineList(state.galleryPage * 6, 6);
+        rows = result.items;
+        hasMore = result.hasMore;
       } else {
-        const local=await archive.localList();
-        const subset=local.slice(state.galleryPage*6,state.galleryPage*6+7);hasMore=subset.length>6;
-        rows=subset.slice(0,6).map(record=>{
-          const photoUrl=URL.createObjectURL(record.photo),arrowsUrl=URL.createObjectURL(record.arrows);
-          state.galleryUrls.push(photoUrl,arrowsUrl);return{id:record.id,createdAt:record.createdAt,photoUrl,arrowsUrl};
+        const local = await archive.localList(state.galleryPage * 6, 6);
+        hasMore = local.hasMore;
+        rows = local.items.map((record) => {
+          const photoUrl = URL.createObjectURL(record.photo),
+            arrowsUrl = URL.createObjectURL(record.arrows);
+          state.galleryUrls.push(photoUrl, arrowsUrl);
+          return {
+            id: record.id,
+            createdAt: record.createdAt,
+            photoUrl,
+            arrowsUrl,
+          };
         });
       }
-      if (serial!==gallerySerial || state.screen!=="gallery") return;
-      $("gallery-status").textContent=rows.length?"":"아직 공개된 궤적이 없습니다.";
+      if (serial !== gallerySerial || state.screen !== "gallery") return;
+      $("gallery-status").textContent = rows.length
+        ? ""
+        : "아직 공개된 궤적이 없습니다.";
       for (const row of rows) {
-        const card=document.createElement("button");card.className="archive-card";card.setAttribute("aria-pressed","false");
-        card.setAttribute("aria-label",dateStamp(row.createdAt)+" 궤적. 누르면 사진을 볼 수 있습니다.");
-        for (const [kind,src] of [["arrows",row.arrowsUrl],["photo",row.photoUrl]]) {
-          const image=new Image();image.src=src;image.alt=kind==="arrows"?"참여자가 만든 궤적과 날짜":"궤적의 바탕이 된 사진";
-          image.className="archive-"+kind;image.draggable=false;image.loading="eager";card.append(image);
+        const card = document.createElement("button");
+        card.className = "archive-card";
+        card.dataset.recordId = row.id;
+        card.setAttribute("aria-pressed", "false");
+        card.setAttribute(
+          "aria-label",
+          dateStamp(row.createdAt) + " 궤적. 누르면 사진을 볼 수 있습니다.",
+        );
+        let photo;
+        for (const [kind, src] of [
+          ["arrows", row.arrowsUrl],
+          ["photo", row.photoUrl],
+        ]) {
+          const image = new Image();
+          if (kind === "arrows") image.src = src;
+          else {
+            photo = image;
+            image.dataset.src = src;
+          }
+          image.alt =
+            kind === "arrows"
+              ? "참여자가 만든 궤적과 날짜"
+              : "궤적의 바탕이 된 사진";
+          image.className = "archive-" + kind;
+          image.draggable = false;
+          card.append(image);
         }
-        let pressedAt=0;
-        card.addEventListener("pointerdown",()=>{pressedAt=performance.now();card.classList.add("is-pressed");});
-        for (const type of ["pointerup","pointercancel","pointerleave"]) card.addEventListener(type,()=>card.classList.remove("is-pressed"));
-        card.addEventListener("click",event=>{
-          if (event.detail>0 && performance.now()-pressedAt>350) return;
-          card.setAttribute("aria-pressed",String(card.getAttribute("aria-pressed")!=="true"));
+        const revealPhoto = () => {
+          if (!photo.hasAttribute("src")) {
+            photo.onload = () => card.classList.add("is-photo-ready");
+            photo.onerror = () => {
+              photo.removeAttribute("src");
+            };
+            photo.src = photo.dataset.src;
+          }
+        };
+        card.addEventListener("pointerenter", revealPhoto);
+        card.addEventListener("focus", revealPhoto);
+        let pressedAt = 0;
+        card.addEventListener("pointerdown", () => {
+          revealPhoto();
+          pressedAt = performance.now();
+          card.classList.add("is-pressed");
         });
-        card.addEventListener("contextmenu",event=>event.preventDefault());
+        for (const type of ["pointerup", "pointercancel", "pointerleave"])
+          card.addEventListener(type, () =>
+            card.classList.remove("is-pressed"),
+          );
+        card.addEventListener("click", (event) => {
+          if (event.detail > 0 && performance.now() - pressedAt > 350) return;
+          revealPhoto();
+          card.setAttribute(
+            "aria-pressed",
+            String(card.getAttribute("aria-pressed") !== "true"),
+          );
+        });
+        card.addEventListener("contextmenu", (event) => event.preventDefault());
         $("gallery-grid").append(card);
       }
-      $("gallery-page").textContent=String(state.galleryPage+1);
-      $("gallery-prev").disabled=state.galleryPage===0;$("gallery-next").disabled=!hasMore;
+      $("gallery-page").textContent = String(state.galleryPage + 1);
+      $("gallery-prev").disabled = state.galleryPage === 0;
+      $("gallery-next").disabled = !hasMore;
     } catch {
-      if(serial!==gallerySerial)return;
-      $("gallery-status").textContent="아카이브를 불러오지 못했어요. 잠시 후 다시 열어 주세요.";
+      if (serial !== gallerySerial) return;
+      $("gallery-status").textContent =
+        "아카이브를 불러오지 못했어요. 잠시 후 다시 열어 주세요.";
     }
   }
-  $("gallery-prev").addEventListener("click",()=>{if(state.galleryPage>0){state.galleryPage--;void loadGallery();}});
-  $("gallery-next").addEventListener("click",()=>{state.galleryPage++;void loadGallery();});
+  $("gallery-prev").addEventListener("click", () => {
+    if (state.galleryPage > 0) {
+      state.galleryPage--;
+      void loadGallery();
+    }
+  });
+  $("gallery-next").addEventListener("click", () => {
+    state.galleryPage++;
+    void loadGallery();
+  });
   function recordDescription(record) {
     if (record.cloud)
       return `${dateStamp(record.createdAt)}\n사진에서 출발한 나의 궤적. 이 링크로 언제든 다시 볼 수 있어요.`;
@@ -918,8 +1140,14 @@
     }
   });
   $("dismiss-error").addEventListener("click", clearError);
+  $("retry-error-save").addEventListener("click", () => {
+    if (!state.record?.photo || state.saveState.cloud === "pending") return;
+    clearError();
+    void persist(state.record);
+  });
   addEventListener("hashchange", route);
   randomizeHome();
-  void infoReady;void landingReady;
+  void infoReady;
+  void landingReady;
   void route();
 })();

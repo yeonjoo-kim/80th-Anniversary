@@ -39,7 +39,16 @@ def fixture(context,fixture):
             row=req.post_data_json
             assert all(row[name] in fixture['uploads'] for name in ['photo_path','arrows_path','poster_path'])
             assert row['owner_id']==OWNER and row['ready']
+            if fixture.get('hold_writes'):
+                fixture['pending_write']=(route,row);return
             fixture['documents'][row['id']]=row;fixture['writes']+=1;reply(status=204)
+        elif path=='/rest/v1/rpc/list_trajectories':
+            assert 'authorization' not in req.headers
+            params=req.post_data_json
+            fixture['lists']+=1
+            rows=sorted(fixture['documents'].values(),key=lambda r:(r['captured_at'],r['id']),reverse=True)
+            rows=[{k:v for k,v in row.items() if k in ['id','captured_at','photo_path','arrows_path']} for row in rows if row.get('ready')]
+            reply(rows[params['p_offset']:params['p_offset']+params['p_limit']])
         elif path=='/rest/v1/rpc/get_creation':
             # Guest result lookup should never attach an auth token or enumerate records.
             assert 'authorization' not in req.headers
@@ -50,7 +59,7 @@ def fixture(context,fixture):
     context.route(SUPABASE+'/**',handle)
     context.route(SUPABASE+'/storage/v1/object/public/**',lambda r:r.fulfill(status=200,content_type='image/png',body=png()))
 
-def new_fixture():return {'fail':True,'uploads':{},'attempts':[],'documents':{},'writes':0,'signup':0,'refresh':0,'lookups':[]}
+def new_fixture():return {'fail':True,'uploads':{},'attempts':[],'documents':{},'writes':0,'signup':0,'refresh':0,'lookups':[],'lists':0}
 
 with sync_playwright() as p:
     browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
@@ -63,28 +72,48 @@ with sync_playwright() as p:
     page.locator('#finish').wait_for(state='visible')
     page.wait_for_function("document.getElementById('archive-status').textContent.includes('다시 시도')")
     assert data['writes']==0 and len(data['uploads'])==2
-    page.locator('#open-record').click();page.locator('#record-images').wait_for(state='visible')
-    assert page.locator('#share-record').is_hidden()
+    record_id=page.evaluate('(async()=>{const r=await trajectoryArchive.localList();return r.items[0].id;})()')
     data['fail']=False
-    page.locator('#retry-cloud').click();page.locator('#share-record').wait_for(state='visible')
+    page.locator('#retry-error-save').click()
+    page.wait_for_function("document.getElementById('archive-status').textContent.includes('온라인 저장 완료')")
+    assert page.locator('#error').is_hidden()
+    page.goto(BASE+'/#result/'+record_id);page.locator('#record-images').wait_for(state='visible')
+    assert page.locator('#share-record').is_visible()
     assert data['writes']==1 and data['signup']==1
     assert len(data['attempts'])==6 and data['attempts'][:3]==data['attempts'][3:]
     assert sorted(v['type'] for v in data['uploads'].values())==['image/jpeg','image/png','image/png']
     result_url=page.url
     other=browser.new_context(viewport={'width':390,'height':844});fixture(other,data)
     viewer=other.new_page();viewer.on('pageerror',lambda e:errors.append(str(e)))
+    viewer.goto(BASE+'/#archive');viewer.locator('.archive-card').first.wait_for()
+    assert viewer.locator('.archive-card').count()==1 and data['lists']==1
+    viewer.locator('.archive-card').click();assert viewer.locator('.archive-card').first.get_attribute('aria-pressed')=='true'
     viewer.goto(result_url);viewer.locator('#record-images').wait_for(state='visible')
     for selector in ['#record-photo','#record-arrows']:
         assert viewer.locator(selector).evaluate('(img)=>img.decode().then(()=>img.naturalWidth>0)')
     assert viewer.locator('#share-record').is_visible()
     assert data['signup']==1 and data['writes']==1 and len(data['lookups'])==1
+    # Fin can open the archive before a slow upload completes; completion refreshes page one.
+    data['hold_writes']=True
+    page.goto(BASE+'/#home')
+    page.locator('#library-file').set_input_files({'name':'palette.png','mimeType':'image/png','buffer':png()})
+    page.locator('#photo').wait_for(state='visible');page.locator('#create').click()
+    page.locator('#finish').wait_for(state='visible')
+    page.wait_for_function("document.getElementById('archive-status').textContent.includes('온라인에 저장하고')")
+    page.locator('#open-record').click();page.locator('.archive-card').wait_for()
+    assert page.locator('.archive-card').count()==1
+    assert 'pending_write' in data
+    pending,new_row=data.pop('pending_write');data['hold_writes']=False
+    data['documents'][new_row['id']]=new_row;data['writes']+=1
+    pending.fulfill(status=204,headers={'Access-Control-Allow-Origin':'*'},body='')
+    page.wait_for_function('document.querySelectorAll(".archive-card").length===2')
     # Expired sessions refresh before uploading, without creating another anonymous user.
     refresh_context=browser.new_context();fixture(refresh_context,data)
     expired={**SESSION,'expires_at':1}
     refresh_context.add_init_script('localStorage.setItem("trajectory-supabase-session-v1",'+json.dumps(json.dumps(expired))+');')
     refresh_page=refresh_context.new_page();refresh_page.goto(BASE+'/#home')
     refresh_page.evaluate('''async()=>{const blob=new Blob(['test'],{type:'image/png'});await trajectoryArchive.onlineSave({id:'00000000-0000-4000-8000-000000000001',createdAt:new Date().toISOString(),photo:new Blob(['photo'],{type:'image/jpeg'}),arrows:blob,poster:blob});}''')
-    assert data['refresh']==1 and data['signup']==1 and data['writes']==2
+    assert data['refresh']==1 and data['signup']==1 and data['writes']==3
     # A malicious/mismatched RPC path is never used as an image URL.
     first_id=next(iter(data['documents']))
     data['documents'][first_id]['photo_path']='https://evil.example/photo.jpg'
@@ -92,4 +121,4 @@ with sync_playwright() as p:
     assert bad
     assert not errors,errors
     browser.close()
-print('PASS: mocked Supabase REST: partial upload failure, 3-file publish, same-path retry, anonymous session reuse/refresh, exact-ID guest lookup without signup, unsafe-path rejection. Live SQL/RLS and real uploads not exercised.')
+print('PASS: mocked Supabase REST + public archive: partial upload failure, 3-file publish, same-path retry, anonymous session reuse/refresh, exact-ID guest lookup without signup, unsafe-path rejection. Live SQL/RLS and real uploads not exercised.')

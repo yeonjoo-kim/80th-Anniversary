@@ -13,10 +13,18 @@
   function database() {
     if (!databasePromise)
       databasePromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
-        req.onupgradeneeded = () =>
-          req.result.createObjectStore(STORE, { keyPath: "id" });
-        req.onsuccess = () => resolve(req.result);
+        const req = indexedDB.open(DB_NAME, 2);
+        req.onupgradeneeded = () => {
+          const store = req.result.objectStoreNames.contains(STORE)
+            ? req.transaction.objectStore(STORE)
+            : req.result.createObjectStore(STORE, { keyPath: "id" });
+          if (!store.indexNames.contains("createdAt"))
+            store.createIndex("createdAt", "createdAt");
+        };
+        req.onsuccess = () => {
+          req.result.onversionchange = () => req.result.close();
+          resolve(req.result);
+        };
         req.onerror = () => reject(req.error);
       }).catch((error) => {
         databasePromise = null;
@@ -40,6 +48,39 @@
       const req = db.transaction(STORE).objectStore(STORE).get(id);
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => reject(req.error);
+    });
+  }
+  async function localList(offset = 0, limit = 6) {
+    const db = await database();
+    offset = Math.max(0, Math.floor(offset));
+    limit = Math.max(1, Math.min(24, Math.floor(limit)));
+    return new Promise((resolve, reject) => {
+      const req = db
+        .transaction(STORE)
+        .objectStore(STORE)
+        .index("createdAt")
+        .openCursor(null, "prev");
+      const items = [];
+      let skipped = false;
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) {
+          resolve({ items, hasMore: false });
+          return;
+        }
+        if (!skipped && offset) {
+          skipped = true;
+          cursor.advance(offset);
+          return;
+        }
+        if (items.length === limit) {
+          resolve({ items, hasMore: true });
+          return;
+        }
+        items.push(cursor.value);
+        cursor.continue();
+      };
     });
   }
   function baseURL() {
@@ -249,11 +290,46 @@
     if (row.id !== id) throw new Error("Unexpected archive record");
     return { id, createdAt: row.captured_at, cloud: cloudFromRow(row) };
   }
+  async function onlineList(offset = 0, limit = 6) {
+    offset = Math.max(0, Math.min(100000, Math.floor(offset)));
+    limit = Math.max(1, Math.min(24, Math.floor(limit)));
+    const rows = await request("/rest/v1/rpc/list_trajectories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ p_offset: offset, p_limit: limit + 1 }),
+    });
+    if (!Array.isArray(rows)) throw new Error("Invalid archive response");
+    const items = rows.slice(0, limit).map((row) => {
+      if (!UUID.test(row.id) || !Number.isFinite(Date.parse(row.captured_at)))
+        throw new Error("Invalid archive record");
+      const photo = row.photo_path,
+        arrows = row.arrows_path;
+      if (
+        typeof photo !== "string" ||
+        typeof arrows !== "string" ||
+        photo.split("/")[1] !== row.id ||
+        arrows.split("/")[1] !== row.id ||
+        photo.split("/")[0] !== arrows.split("/")[0] ||
+        !photo.endsWith("/photo.jpg") ||
+        !arrows.endsWith("/arrows.png")
+      )
+        throw new Error("Invalid archive image path");
+      return {
+        id: row.id,
+        createdAt: row.captured_at,
+        photoUrl: imageURL(photo),
+        arrowsUrl: imageURL(arrows),
+      };
+    });
+    return { items, hasMore: rows.length > limit };
+  }
   window.trajectoryArchive = {
     configured,
     localSave,
     localGet,
+    localList,
     onlineSave,
     onlineGet,
+    onlineList,
   };
 })();
