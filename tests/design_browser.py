@@ -75,6 +75,9 @@ with sync_playwright() as p:
     assert stamp['count'] > 100 and stamp['minX'] > 800 and stamp['maxY'] < 1260 and stamp['maxX']-stamp['minX'] < 260, stamp
     hidden_arrow_pixels = page.evaluate('''async()=>{const doc=new DOMParser().parseFromString(exportSVGs.find(s=>s.includes('poster-typography')),'image/svg+xml'),svg=document.importNode(doc.documentElement,true);svg.style.cssText='position:fixed;left:-10000px;visibility:hidden';document.body.append(svg);const photo=svg.querySelector('[data-layer="poster-photo"]'),box=photo.getBBox(),m=photo.getCTM(),start=new DOMPoint(box.x,box.y).matrixTransform(m),end=new DOMPoint(box.x+box.width,box.y+box.height).matrixTransform(m);svg.remove();const record=(await trajectoryArchive.localList(0,1)).items[0],image=await createImageBitmap(record.arrows),c=document.createElement('canvas');c.width=image.width;c.height=image.height;const x=c.getContext('2d');x.drawImage(image,0,0);const r=x.getImageData(Math.ceil(start.x),Math.ceil(start.y),Math.floor(end.x)-Math.ceil(start.x),Math.floor(end.y)-Math.ceil(start.y)).data;let count=0;for(let i=0;i<r.length;i+=4)if(Math.abs(r[i]-238)>1||Math.abs(r[i+1]-238)>1||Math.abs(r[i+2]-239)>1)count++;return count;}''')
     assert hidden_arrow_pixels == 0, 'An arrowhead would be covered by the poster photograph'
+    alignment=page.evaluate('''()=>{const d=new DOMParser().parseFromString(exportSVGs.find(s=>s.includes('poster-typography')),'image/svg+xml'),s=document.importNode(d.documentElement,true);s.style.cssText='position:fixed;left:-10000px;visibility:hidden';document.body.append(s);const g=s.querySelector('[data-layer="poster-typography"]'),m=g.transform.baseVal.consolidate().matrix,p=s.querySelector('[data-layer="poster-photo"]').getBBox(),crest=g.children[50].getBBox(),row=[...g.children].slice(91,100).map(e=>e.getBBox());const result={left:p.x-(crest.x+m.e),gap:Math.min(...row.map(b=>b.y))+m.f-(p.y+p.height)};s.remove();return result;}''')
+    assert abs(alignment['left'])<.001 and abs(alignment['gap']-8)<.001,alignment
+
     viewports = [(1024,768),(1280,720),(1366,768),(1440,900),(1920,1080),(2560,1440),(1366,500)]
     title_sizes = []
     for width,height in viewports:
@@ -109,13 +112,13 @@ with sync_playwright() as p:
         assert controls[0]['bottom']<controls[1]['y']<controls[1]['bottom']<controls[2]['y']
         page.evaluate('location.hash="#archive"');page.locator('.archive-card').first.wait_for()
         gallery_title=geometry(page,'#gallery-title')
-        assert abs(gallery_title['x']-title['x'])<1 and gallery_title['font']==28
+        assert gallery_title['x']>geometry(page,'#gallery .back-button')['right'] and gallery_title['font']==28
         gallery_back=geometry(page,'#gallery .back-button')
         assert abs(gallery_back['x']-back['x'])<1 and abs(gallery_back['y']-back['y'])<1
         visible(page, ['.gallery-header','#gallery-scroll'],width,height)
         page.locator('.archive-card').first.click();page.locator('#record-images').wait_for(state='visible')
         detail_title=geometry(page,'#record-title')
-        assert abs(detail_title['x']-title['x'])<1 and detail_title['font']==28
+        assert detail_title['x']>geometry(page,'#record .back-button')['right'] and detail_title['font']==28
         record_back=geometry(page,'#record .back-button')
         assert abs(record_back['x']-back['x'])<1 and abs(record_back['y']-back['y'])<1
         visible(page, ['.record-header','#record-images','.record-navigation'],width,height)
@@ -126,11 +129,11 @@ with sync_playwright() as p:
         title=geometry(page,'#home-title')
         page.evaluate('location.hash="#archive"');page.locator('.archive-card').first.wait_for()
         archive_title=geometry(page,'#gallery-title')
-        for key in ['x','font']:assert abs(archive_title[key]-title[key])<1,(key,archive_title,title)
+        assert archive_title['font']==title['font'] and archive_title['x']>geometry(page,'#gallery .back-button')['right']
         visible(page,['.gallery-header','#gallery-scroll'],width,height)
         page.locator('.archive-card').first.click();page.locator('#record-images').wait_for(state='visible')
         record_title=geometry(page,'#record-title')
-        for key in ['x','font']:assert abs(record_title[key]-title[key])<1,(key,record_title,title)
+        assert record_title['font']==title['font'] and record_title['x']>geometry(page,'#record .back-button')['right']
         visible(page,['.record-header','#record-images','.record-navigation'],width,height)
     page.set_viewport_size({'width':1440,'height':900});page.emulate_media(reduced_motion='no-preference')
     page.evaluate('location.hash="#photo"');page.locator('#photo').wait_for(state='visible')

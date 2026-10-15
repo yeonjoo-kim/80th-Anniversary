@@ -110,6 +110,7 @@
   }
   function updatePageSurface() {
     const home = state.screen === "home";
+    document.documentElement.dataset.screen = state.screen;
     document.documentElement.style.setProperty(
       "--page-surface",
       home
@@ -375,12 +376,8 @@
       button.style.color = "var(--button-ink)";
     }
   }
-  const interactionTarget = (event) =>
-    event.target.closest("button, a[href]:not([download])");
-  const sound = () => feedback({ vibrate: false, unlock: false });
-  let heldButton = null,
-    lastPointerType = "mouse",
-    touchSoundHandled = false;
+  const interactionTarget = (event) => event.target.closest("button");
+  let heldButton = null;
   document.addEventListener("pointerover", (event) => {
     const button = interactionTarget(event);
     if (
@@ -390,15 +387,7 @@
       !button.contains(event.relatedTarget)
     ) {
       paintInteraction(button);
-      sound();
     }
-  });
-  document.addEventListener("focusin", (event) => {
-    const button = interactionTarget(event);
-    if (button && !button.disabled) sound();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Tab") feedback({ vibrate: false });
   });
   document.addEventListener(
     "pointerdown",
@@ -414,14 +403,7 @@
         moved: false,
       };
       delete button.dataset.dragged;
-      lastPointerType = event.pointerType;
-      touchSoundHandled = false;
       paintInteraction(button);
-      if (event.pointerType === "touch") {
-        try {
-          navigator.vibrate?.(18);
-        } catch {}
-      } else feedback();
     },
     true,
   );
@@ -437,7 +419,6 @@
       if (heldButton.moved && performance.now() - heldButton.last > 85) {
         heldButton.last = performance.now();
         paintInteraction(heldButton.button);
-        feedback();
       }
     },
     true,
@@ -461,30 +442,13 @@
         event.stopImmediatePropagation();
         return;
       }
-      if (button && (event.detail === 0 || lastPointerType === "touch")) {
+      if (button && !button.disabled) {
         paintInteraction(button);
-        if (!touchSoundHandled || event.detail === 0)
-          feedback({ vibrate: event.detail === 0 });
-        else if (mediaBackend && !mediaActivated && mediaAudio?.paused) {
-          lastFeedback = -Infinity;
-          feedback({ vibrate: false });
-        } else void primeAudio();
+        // One cue per activation, in the trusted click/tap handler (also Enter/Space).
+        feedback();
       }
     },
     true,
-  );
-
-  document.addEventListener(
-    "touchend",
-    (event) => {
-      if (interactionTarget(event) || event.target.closest("#stripe-field")) {
-        if (mediaBackend && !mediaActivated && mediaAudio?.paused)
-          lastFeedback = -Infinity;
-        feedback({ vibrate: false });
-        touchSoundHandled = true;
-      }
-    },
-    { capture: true, passive: true },
   );
 
   let pointer = null;
@@ -492,7 +456,6 @@
     if (event.button !== 0) return;
     pointer = { id: event.pointerId, x: event.clientX, steps: 0 };
     $("stripe-field").setPointerCapture(event.pointerId);
-    feedback();
   });
   $("stripe-field").addEventListener("pointermove", (event) => {
     if (!pointer || pointer.id !== event.pointerId) return;
@@ -503,7 +466,6 @@
     else stripeOrder.push(stripeOrder.shift());
     pointer.steps = step;
     drawStripes();
-    feedback();
   });
   for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
     $("stripe-field").addEventListener(event, () => {
@@ -631,7 +593,6 @@
       state.screen === "record" &&
       state.viewedRecord?.id === state.record?.id
     ) {
-      $("share-record").hidden = !state.viewedRecord.cloud;
       $("retry-cloud").hidden =
         !archive.configured() ||
         Boolean(state.viewedRecord.cloud) ||
@@ -748,7 +709,28 @@
         path.setAttribute("fill-opacity", colors[i].opacity);
       });
   }
-  const landingReady = fetch("assets/landing.svg?v=5")
+  function fitLanding() {
+    const svg = $("landing-art").querySelector("svg");
+    if (!svg) return;
+    const { width, height } = $("experience").getBoundingClientRect();
+    const aspect = width / height;
+    // Mobile keeps the complete 402 × 874 reference frame. A wider camera
+    // shows the original paths beyond that frame, without stretching them.
+    // Desktop includes the bounds of all five paths, including their shafts.
+    const desktop = width >= 1024;
+    const frameWidth = desktop ? 1860 : 402;
+    const frameHeight = desktop ? 1876 : 874;
+    const centerX = desktop ? 241 : 201;
+    const centerY = desktop ? 748 : 437;
+    const h = Math.max(frameHeight, frameWidth / aspect);
+    const w = h * aspect;
+    svg.setAttribute(
+      "viewBox",
+      `${centerX - w / 2} ${centerY - h / 2} ${w} ${h}`,
+    );
+  }
+  addEventListener("resize", fitLanding);
+  const landingReady = fetch("assets/landing.svg?v=6")
     .then((r) => {
       if (!r.ok) throw Error();
       return r.text();
@@ -756,6 +738,7 @@
     .then((text) => {
       $("landing-art").innerHTML = text;
       landingSVGReady = true;
+      fitLanding();
       randomizeLanding();
     })
     .catch(() => {});
@@ -915,7 +898,6 @@
       frames[index].classList.remove("active");
       index = (index + 1) % 8;
       frames[index].classList.add("active");
-      if (!document.hidden) sound();
     }, 230);
   }
   function dateStamp(iso) {
@@ -979,8 +961,19 @@
   async function artifact(result, createdAt, photo, withType) {
     await backReady;
     const type = withType ? await posterType() : null;
+    // Original outlined institution logo: left/start at (57.25777, 615.96997).
+    // Apply exactly the typography centering translation, then leave an 8-unit gutter.
+    const photoX = type ? 57.25777 + EXPORT_FRAME.width / 2 - type.centerX : 0;
+    const photoY = type
+      ? 615.96997 +
+        EXPORT_FRAME.y +
+        EXPORT_FRAME.height / 2 -
+        type.centerY -
+        8 -
+        50
+      : 0;
     const thumbnail = withType
-      ? `<image data-layer="poster-photo" x="61" y="544" width="37" height="56" preserveAspectRatio="xMidYMid slice" href="${await dataURL(photo)}"/>`
+      ? `<image data-layer="poster-photo" x="${photoX}" y="${photoY}" width="37" height="50" preserveAspectRatio="xMidYMid slice" href="${await dataURL(photo)}"/>`
       : "";
     const typeLayer = type
       ? `<g data-layer="poster-typography" transform="translate(${EXPORT_FRAME.width / 2 - type.centerX} ${EXPORT_FRAME.y + EXPORT_FRAME.height / 2 - type.centerY})">${type.markup}</g>${thumbnail}`
@@ -1369,18 +1362,6 @@
   $("gallery-scroll").addEventListener("scroll", ensureGalleryFilled, {
     passive: true,
   });
-  let lastScrollSound = 0;
-  for (const type of ["wheel", "touchmove"])
-    $("gallery-scroll").addEventListener(
-      type,
-      () => {
-        if (performance.now() - lastScrollSound > 180) {
-          lastScrollSound = performance.now();
-          sound();
-        }
-      },
-      { passive: true },
-    );
   $("gallery-more").addEventListener("click", () => loadGallery());
   async function updateRecordNeighbors(record, serial) {
     try {
@@ -1417,7 +1398,6 @@
     $("record-prev").disabled = true;
     $("record-next").disabled = true;
     $("record-images").hidden = true;
-    $("share-record").hidden = true;
     $("retry-cloud").hidden = true;
     $("record-description").textContent = "궤적을 불러오고 있어요…";
     if (
@@ -1462,22 +1442,12 @@
     $("record-images").hidden = false;
     $("record-description").textContent = "";
     void updateRecordNeighbors(record, serial);
-    $("share-record").hidden = !record.cloud;
     $("retry-cloud").hidden =
       !archive.configured() ||
       Boolean(record.cloud) ||
       state.saveState.cloud === "pending";
     randomizeButtons();
   }
-  $("share-record").addEventListener("click", async () => {
-    if (!state.viewedRecord?.cloud) return;
-    try {
-      await navigator.clipboard.writeText(location.href);
-      $("share-record").textContent = "복사됨 ✓";
-    } catch {
-      showError("주소 표시줄의 링크를 복사해 주세요.");
-    }
-  });
   $("retry-cloud").addEventListener("click", async () => {
     const record = state.viewedRecord;
     if (!record?.photo) return;

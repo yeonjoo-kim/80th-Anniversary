@@ -38,7 +38,7 @@ with sync_playwright() as p:
     assert page.locator('.landing-eyebrow i').evaluate('(e)=>getComputedStyle(e).fontStyle')=='normal'
     assert page.evaluate('feedbackCalls.length')==0
     assert page.locator('#landing-art .landing-arrow').count()==5
-    assert page.locator('#landing-art svg').get_attribute('preserveAspectRatio')=='none'
+    assert page.locator('#landing-art svg').get_attribute('preserveAspectRatio')=='xMidYMid meet'
     assert page.locator('body').evaluate('(e)=>getComputedStyle(e).fontWeight')=='500'
     assert page.locator('#feedback-toggle').count()==0
     assert page.locator('#replace-photo').count()==0
@@ -69,7 +69,8 @@ with sync_playwright() as p:
     page.wait_for_function('soundCalls.length>0')
     sound_count=page.evaluate('soundCalls.length');page.wait_for_timeout(100)
     page.locator('#home .info-button').hover()
-    page.wait_for_function('(count)=>soundCalls.length>count',arg=sound_count)
+    page.wait_for_timeout(200)
+    assert page.evaluate('soundCalls.length')==sound_count
     assert page.locator('#home .info-button').evaluate('(e)=>getComputedStyle(e).backgroundColor')=='rgba(0, 0, 0, 0)'
     # Dragging the photo-choice column must animate its color without opening a native picker.
     box=page.locator('#choose-photo').bounding_box();x=box['x']+box['width']/2;y=box['y']+box['height']/2
@@ -98,7 +99,8 @@ with sync_playwright() as p:
     page.set_viewport_size({'width':390,'height':844});upload(page)
     page.locator('#create').tap();page.locator('#processing').wait_for(state='visible')
     sound_count=page.evaluate('soundCalls.length')
-    page.wait_for_function('(count)=>soundCalls.length>count',arg=sound_count,timeout=1200)
+    page.wait_for_timeout(700)
+    assert page.evaluate('soundCalls.length')==sound_count, 'Processing animation must be silent'
     page.locator('#finish').wait_for(state='visible',timeout=15000)
     page.wait_for_function("document.getElementById('archive-status').textContent.includes('이 브라우저에 저장됨')")
     box=page.locator('#archive-status').bounding_box();assert box['width']<=1 and box['height']<=1
@@ -252,4 +254,4 @@ with sync_playwright() as p:
     assert not errors,errors
     native.close()
     b.close()
-print('PASS: 10 viewports, full visible content, photo aspect ratios, 2s/800ms timers, hover and processing sound, regular/italic typography, home archive spacing, equal Fin actions, dual PNG download, 4:5 scroll archive, newest-first batches, photo preview/detail/back restoration, v1 migration, reduced motion.')
+print('PASS: 10 viewports, full visible content, photo aspect ratios, 2s/800ms timers, silent hover/drag/processing and button-only sound, regular/italic typography, home archive spacing, equal Fin actions, dual PNG download, 4:5 scroll archive, newest-first batches, photo preview/detail/back restoration, v1 migration, reduced motion.')
