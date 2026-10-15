@@ -502,6 +502,7 @@ i {
   hyphenate-limit-chars: 6 3 3;
 }
 .info-copy [lang="ko"] {
+  letter-spacing: -0.03em;
   word-break: normal;
   line-break: strict;
 }
@@ -1018,8 +1019,8 @@ dialog .text-button {
     object-position: left top;
   }
   .info-copy {
-    left: max(var(--page-x), calc((100% - 1080px) / 2));
-    right: max(var(--page-x), calc((100% - 1080px) / 2));
+    left: max(var(--page-x), calc((100% - 1280px) / 2));
+    right: max(var(--page-x), calc((100% - 1280px) / 2));
     top: max(17dvh, calc(var(--page-top) + var(--back-size) + 16px));
     bottom: var(--page-bottom);
     display: grid;
@@ -1382,4 +1383,11 @@ html[data-screen="home"] #home {
 #download-status {
   margin: 0;
   line-height: 1.25;
+}
+
+@media (max-width: 1023px) and (hover: none) and (pointer: coarse) {
+  #gallery,
+  #record {
+    --title-size: 26px;
+  }
 }

@@ -34,7 +34,7 @@ with sync_playwright() as p:
     offline(context)
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(BASE);page.locator('#landing-art svg').wait_for();page.evaluate('document.fonts.ready')
-    assert page.locator('html').get_attribute('data-revision')=='7'
+    assert page.locator('html').get_attribute('data-revision')=='8'
     for w,h in [(320,480),(390,650),(390,844),(430,932),(844,390),(1024,768),(1440,900),(1920,1080)]:
         page.set_viewport_size({'width':w,'height':h})
         page.wait_for_timeout(40)
@@ -73,6 +73,9 @@ with sync_playwright() as p:
     assert field['y']==-47 and field['height']>=844+47+34,field
     assert surface['y']==-47 and surface['height']>=844+47+34,surface
     assert box(page,'#home-title')['y']>=47
+    page.evaluate('location.hash="#archive"');page.locator('#gallery').wait_for(state='visible')
+    assert page.locator('#gallery-title').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==26
+    page.evaluate('location.hash="#home"');page.locator('#home').wait_for(state='visible')
     assert page.locator('#experience').evaluate('e=>getComputedStyle(e).position')=='fixed'
     page.evaluate('document.documentElement.style.removeProperty("--safe-top");document.documentElement.style.removeProperty("--safe-bottom")')
     page.set_viewport_size({'width':390,'height':844})
@@ -95,6 +98,7 @@ with sync_playwright() as p:
         assert page.locator('#record-photo').evaluate('i=>getComputedStyle(i).objectFit')=='cover'
         assert page.locator('#record-photo').evaluate('i=>i.naturalHeight/i.naturalWidth')==20
         back=box(page,'#record .back-button');assert abs(back['x']-w*.0845)<1
+        assert page.locator('#record-title').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==(26 if w<1024 else 30)
         for ident,num in [('record-prev',4),('record-next',1)]:
             original=ET.parse(ROOT/f'assets/arrows/arrow-{num}.svg').getroot()
             assert page.locator('#'+ident+' path').get_attribute('d')==original.find('s:path',NS).get('d')

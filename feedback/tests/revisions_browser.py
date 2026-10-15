@@ -137,8 +137,8 @@ with sync_playwright() as p:
         if len(downloads)==2:break
         page.wait_for_timeout(100)
     assert len(downloads)==2,[d.suggested_filename for d in downloads]
-    arrows=assert_png(next(d for d in downloads if '-arrows-' in d.suggested_filename))
-    poster=assert_png(next(d for d in downloads if '-poster-' in d.suggested_filename));assert arrows!=poster
+    arrows=assert_png(next(d for d in downloads if d.suggested_filename=='80th Anniv. My Trajectories.png'))
+    poster=assert_png(next(d for d in downloads if d.suggested_filename=='80th Anniv. My Trajectories (2).png'));assert arrows!=poster
     page.locator('.archive-card').first.wait_for()
     card=page.locator('.archive-card').first
     assert card.locator('.archive-photo').get_attribute('src') is None
@@ -245,7 +245,7 @@ with sync_playwright() as p:
     phone.locator('#download').tap();phone.locator('#save-both').tap();phone.wait_for_url('**/#archive')
     shared=phone.evaluate('shareCalls');assert len(shared)==1 and shared[0]['active'] and len(shared[0]['files'])==2,shared
     assert all(f['type']=='image/png' and f['size']>1000 for f in shared[0]['files'])
-    assert shared[0]['files'][0]['name']!=shared[0]['files'][1]['name']
+    assert [f['name'] for f in shared[0]['files']]==['80th Anniv. My Trajectories.png','80th Anniv. My Trajectories (2).png']
     phone.evaluate('location.hash="#finish"');phone.locator('#finish').wait_for(state='visible');phone.locator('#download').tap()
     phone.evaluate('Object.defineProperty(navigator,"share",{value:async()=>{throw new DOMException("cancel","AbortError");},configurable:true})')
     phone.locator('#save-both').tap();phone.wait_for_function('document.querySelector("#download-status").textContent.includes("취소")')
