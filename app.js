@@ -956,7 +956,7 @@
     return `${part("year")}/${part("month")}/${part("day")}`;
   }
   function arrowMarkup(result) {
-    return result.active
+    const markup = result.active
       .map((arrow) => {
         const source = backArrows.find(
           (shape) => shape.direction === arrow.dir,
@@ -966,6 +966,19 @@
         return `<g data-arrow-source="${source.number}" fill="${arrow.hex}" opacity="${arrow.opacity}" transform="translate(62 382) scale(.6) translate(${-x} ${-y})"><path d="${source.path}" transform="${source.transform}"/></g>`;
       })
       .join("");
+    // Center the visible combination, rather than its shared starting point.
+    // Keep the original scale and vertical placement in both exported images.
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.style.cssText = "position:fixed;left:-10000px;top:0;visibility:hidden";
+    svg.innerHTML = `<g>${markup}</g>`;
+    document.body.append(svg);
+    try {
+      const bounds = svg.firstElementChild.getBBox();
+      const shift = EXPORT_FRAME.width / 2 - (bounds.x + bounds.width / 2);
+      return `<g data-layer="trajectory" transform="translate(${shift} 0)">${markup}</g>`;
+    } finally {
+      svg.remove();
+    }
   }
   let posterTypePromise;
   function posterType() {
