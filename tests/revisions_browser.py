@@ -19,8 +19,11 @@ def no_overflow(page,selectors=()):
         assert e['scroll'][0]<=e['client'][0]+1 and e['scroll'][1]<=e['client'][1]+1,state
 
 def upload(page,width=160,height=240):
+    previous=page.locator('#photo-preview').get_attribute('src')
     page.locator('#library-file').set_input_files({'name':'palette.png','mimeType':'image/png','buffer':png(width,height)})
-    page.locator('#photo').wait_for(state='visible');page.locator('#photo-preview').evaluate('(img)=>img.decode()')
+    page.locator('#photo').wait_for(state='visible')
+    page.wait_for_function('previous=>{const img=document.querySelector("#photo-preview");return img.getAttribute("src")!==previous&&img.complete&&img.naturalWidth>0;}',arg=previous)
+    page.locator('#photo-preview').evaluate('(img)=>img.decode()')
 
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
@@ -29,6 +32,7 @@ with sync_playwright() as p:
     c.add_init_script(INSTRUMENT)
     page=c.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(BASE);page.locator('#landing-art .landing-arrow').first.wait_for()
+    page.evaluate('document.fonts.ready')
     assert page.locator('#landing-art .landing-arrow').count()==5
     assert page.locator('#feedback-toggle').count()==0
     assert page.locator('#replace-photo').count()==0

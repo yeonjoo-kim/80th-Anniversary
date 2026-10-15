@@ -1,4 +1,18 @@
 @font-face {
+  font-family: "KoPubWorld Batang";
+  src: url("assets/fonts/KoPubWorldBatang-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "KoPubWorld Batang";
+  src: url("assets/fonts/KoPubWorldBatang-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
   font-family: "Panchi Mono";
   src: url("assets/fonts/PanchiMono.otf") format("opentype");
   font-weight: 400;
@@ -14,14 +28,14 @@
 }
 :root {
   --paper: #eeeeef;
-  --ko: "Yeollin Myeongjo", "열린명조", "Batang", serif;
+  --ko: "KoPubWorld Batang", serif;
   --en: "Playfair Display", Georgia, serif;
   --date: "Panchi Mono", monospace;
   --view-height: 100vh;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   font-family: var(--ko);
-  font-weight: 500;
+  font-weight: 300;
   font-synthesis: none;
   color: #231815;
   background: #dcdcdc;
@@ -780,6 +794,7 @@ dialog .text-button {
   }
   .gallery-pagination button {
     height: 32px;
+    font-size: 20px;
   }
   .finish-actions .color-button {
     min-height: 44px;
