@@ -91,9 +91,10 @@ with sync_playwright() as p:
         copy=geometry(page,'.info-copy');assert copy['font']>=18 if height>=700 else copy['font']>=14
         tracking=page.locator('.info-copy [lang=ko]').evaluate('e=>{const s=getComputedStyle(e);return parseFloat(s.letterSpacing)/parseFloat(s.fontSize)}')
         assert abs(tracking+.03)<.0001
-        assert page.locator('.info-copy [lang=en]').evaluate('e=>getComputedStyle(e).letterSpacing')=='normal'
-        if width==1440:assert abs(copy['width']-1440*(1-2*.0845))<1
-        if width>=1920:assert abs(copy['width']-1280)<1
+        english=page.locator('.info-copy [lang=en]').evaluate('e=>{const s=getComputedStyle(e);return{weight:s.fontWeight,tracking:parseFloat(s.letterSpacing)/parseFloat(s.fontSize)}}')
+        assert english['weight']=='400' and abs(english['tracking']+.01)<.0001,english
+        assert copy['font']<=24
+        if width>=1440:assert abs(copy['width']-960)<1
         assert 'A decade Recorded, A decade Envisioned' in page.locator('.info-copy').inner_text().replace('\n',' ')
         assert page.locator('.info-copy [lang=en] p').last.inner_text()=='This website was created by Yeonjoo Kim, Jung Ah Lee, and Chris Hamamoto.'
         page.evaluate('location.hash="#photo"');page.locator('#photo').wait_for(state='visible')
