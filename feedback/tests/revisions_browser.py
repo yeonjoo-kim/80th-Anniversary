@@ -7,11 +7,11 @@ from playwright.sync_api import sync_playwright
 from smoke import png,assert_png
 BASE=(sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:8002').rstrip('/')
 VIEWPORTS=[(320,480),(320,568),(360,640),(375,667),(390,844),(412,915),(430,932),(768,1024),(844,390),(1440,900)]
-INSTRUMENT='''window.feedbackCalls=[];window.dateCalls=[];window.soundCalls=[];
+INSTRUMENT='''window.feedbackCalls=[];window.dateCalls=[];window.soundCalls=[];window.soundLevels=[];
 Object.defineProperty(navigator,'vibrate',{configurable:true,value:ms=>{feedbackCalls.push(ms);return true;}});
 const text=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(value,...args){dateCalls.push({font:this.font,text:value});return text.call(this,value,...args);};
 window.exportSVGs=[];const objectURL=URL.createObjectURL;URL.createObjectURL=function(blob){if(blob.type==='image/svg+xml')void blob.text().then(text=>exportSVGs.push(text));return objectURL.call(this,blob);};
-const start=AudioBufferSourceNode.prototype.start;AudioBufferSourceNode.prototype.start=function(...args){soundCalls.push(args);return start.apply(this,args);};'''
+const start=AudioBufferSourceNode.prototype.start;AudioBufferSourceNode.prototype.start=function(...args){if(this.buffer?.length>1){soundCalls.push(args);const data=this.buffer.getChannelData(0),rate=this.buffer.sampleRate,offset=Math.round((args[1]||0)*rate),end=Math.min(data.length,offset+Math.round((args[2]||.1)*rate));let peak=0;for(let i=offset;i<end;i++)peak=Math.max(peak,Math.abs(data[i]));soundLevels.push(peak);}return start.apply(this,args);};'''
 def no_overflow(page,selectors=()):
     state=page.evaluate('''selectors=>({w:innerWidth,h:innerHeight,document:[document.documentElement.scrollWidth,document.documentElement.scrollHeight],elements:selectors.map(selector=>{const e=document.querySelector(selector),r=e.getBoundingClientRect();return {selector,x:r.x,y:r.y,right:r.right,bottom:r.bottom,scroll:[e.scrollWidth,e.scrollHeight],client:[e.clientWidth,e.clientHeight]};})})''',list(selectors))
     assert state['document'][0]<=state['w']+1 and state['document'][1]<=state['h']+1,state
@@ -38,7 +38,7 @@ with sync_playwright() as p:
     assert page.locator('.landing-eyebrow i').evaluate('(e)=>getComputedStyle(e).fontStyle')=='normal'
     assert page.evaluate('feedbackCalls.length')==0
     assert page.locator('#landing-art .landing-arrow').count()==5
-    assert page.locator('#landing-art svg').get_attribute('preserveAspectRatio')=='xMidYMid meet'
+    assert page.locator('#landing-art svg').get_attribute('preserveAspectRatio')=='none'
     assert page.locator('body').evaluate('(e)=>getComputedStyle(e).fontWeight')=='500'
     assert page.locator('#feedback-toggle').count()==0
     assert page.locator('#replace-photo').count()==0
@@ -114,11 +114,11 @@ with sync_playwright() as p:
         page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#finish','.finished-art','.finish-actions','#open-record'])
         widths=page.locator('.finish-actions > button').evaluate_all('es=>es.map(e=>e.getBoundingClientRect().width)')
         assert len(widths)==3 and max(widths)-min(widths)<1,widths
-        page.locator('#finish .info-button').click();page.locator('#info').wait_for(state='visible')
+        page.evaluate('location.hash="#home"');page.locator('#home').wait_for(state='visible');page.locator('#home .info-button').click();page.locator('#info').wait_for(state='visible')
         page.wait_for_timeout(50);no_overflow(page,['#info','.info-copy','#close-info'])
         assert page.locator('.info-copy').evaluate('(e)=>getComputedStyle(e).textAlign')=='justify'
         assert page.locator('.info-copy [lang=en]').evaluate('(e)=>getComputedStyle(e).fontStyle')=='normal'
-        page.locator('#close-info').click();page.locator('#finish').wait_for(state='visible')
+        page.locator('#close-info').click();page.locator('#home').wait_for(state='visible');page.evaluate('location.hash="#finish"');page.locator('#finish').wait_for(state='visible')
     page.set_viewport_size({'width':390,'height':844})
     page.locator('#download').tap()
     assert page.locator('#download-title').count()==0
@@ -210,23 +210,25 @@ with sync_playwright() as p:
     # Eight supplied SVG shapes advance at 1-second intervals; native mobile share receives both PNGs once.
     native=b.new_context(viewport={'width':390,'height':844},has_touch=True,is_mobile=True,user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1')
     native.route('**/supabase-config.js',lambda r:r.fulfill(content_type='application/javascript',body='window.SUPABASE_CONFIG=null;'))
+    native.add_init_script(INSTRUMENT)
     native.add_init_script('''window.shareCalls=[];Object.defineProperty(navigator,'canShare',{value:({files})=>files.length===2});Object.defineProperty(navigator,'share',{configurable:true,writable:true,value:async value=>{shareCalls.push({active:navigator.userActivation.isActive,files:value.files.map(f=>({name:f.name,size:f.size,type:f.type}))});}});''')
     phone=native.new_page();phone.on('pageerror',lambda e:errors.append(str(e)))
     with phone.expect_response('**/assets/back-arrows.json') as response:phone.goto(BASE+'/#home')
     response.value.body()
     phone.locator('#home .info-button').tap()
-    phone.wait_for_function('document.querySelector("audio[data-feedback]").currentTime>0')
+    phone.wait_for_function('soundCalls.length>0&&soundLevels.every(level=>level>.1)&&document.querySelector("audio[data-feedback=session]").currentTime>0')
     media=phone.locator('audio[data-feedback]').evaluate('(e)=>({muted:e.muted,volume:e.volume,error:e.error?.code,elapsed:e.currentTime})')
     assert not media['muted'] and media['volume']>0 and media['error'] is None and media['elapsed']>0,media
     phone.locator('#close-info').tap();phone.locator('#home').wait_for(state='visible')
     assert phone.locator('audio[data-feedback]').count()==1
-    media_source=phone.locator('audio[data-feedback]').get_attribute('src')
-    phone.evaluate('''()=>{window.feedbackPlaybackCount=0;document.querySelector('audio[data-feedback]').addEventListener('playing',()=>feedbackPlaybackCount++);}''')
+    media_source=phone.locator('audio[data-feedback=session]').get_attribute('src')
+    count=phone.evaluate('soundCalls.length')
     phone.wait_for_timeout(120)
     phone.locator('#home .info-button').tap()
-    phone.wait_for_function('feedbackPlaybackCount>0')
-    assert phone.locator('audio[data-feedback]').get_attribute('src')==media_source
-    assert phone.locator('audio[data-feedback]').evaluate('e=>e.currentTime>.25&&!e.error')
+    phone.wait_for_function('count=>soundCalls.length>count',arg=count)
+    assert phone.locator('audio[data-feedback=session]').get_attribute('src')==media_source
+    assert phone.locator('audio[data-feedback=session]').evaluate('e=>e.loop&&!e.error&&!e.muted')
+    assert phone.evaluate('soundLevels.every(level=>level>.1)')
     phone.locator('#close-info').tap();phone.locator('#home').wait_for(state='visible')
     upload(phone)
     back=phone.locator('#photo .back-button');phone.wait_for_function('document.querySelector("#photo .back-button").dataset.arrow!==undefined')

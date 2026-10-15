@@ -45,7 +45,7 @@
   font-weight: 500;
   font-synthesis: none;
   color: #231815;
-  background: var(--paper);
+  background: var(--page-surface, var(--paper));
   color-scheme: light;
 }
 @supports (height: 100dvh) {
@@ -65,6 +65,7 @@ body {
   overscroll-behavior: none;
 }
 body {
+  background: var(--page-surface, var(--paper));
   touch-action: manipulation;
 }
 button,
@@ -99,9 +100,17 @@ i {
 }
 #experience {
   --page-x: 8.45vw;
-  --page-top: max(3.9dvh, var(--safe-top));
-  --title-size: clamp(21px, 6.7vw, 28px);
+  --page-top: max(2.5dvh, var(--safe-top));
+  --title-size: 28px;
   --back-size: 52px;
+  --page-bottom: max(2.5dvh, var(--safe-bottom));
+  --action-height: clamp(52px, 10dvh, 85px);
+  --photo-gap: clamp(16px, 4dvh, 42px);
+  --art-width: 100vw;
+  --art-height: calc(
+    var(--view-height) - var(--page-top) - var(--page-bottom) -
+      var(--action-height) - var(--photo-gap)
+  );
   width: 100%;
   height: var(--view-height);
   margin: 0 auto;
@@ -155,7 +164,7 @@ i {
   left: 3%;
   right: 3%;
   margin: 0;
-  font-size: clamp(10px, 3.4vw, 14px);
+  font-size: 14px;
   line-height: 1.5;
   pointer-events: none;
 }
@@ -169,7 +178,7 @@ i {
   top: 43.5%;
   left: 3%;
   right: 3%;
-  font-size: clamp(15px, 5.7vw, 24px);
+  font-size: 24px;
   font-weight: 500;
   line-height: 1.4;
   margin: 0;
@@ -178,7 +187,7 @@ i {
 .landing-enter h1 i {
   display: block;
   margin: 10px auto 0;
-  font-size: clamp(18px, 6.3vw, 27px);
+  font-size: 27px;
   line-height: 1.25;
 }
 .info-button {
@@ -217,7 +226,7 @@ i {
   top: max(3.9%, var(--safe-top));
   left: 8.45%;
   margin: 0;
-  font-size: clamp(21px, 6.7vw, 28px);
+  font-size: 28px;
   font-weight: 500;
   line-height: 1.2;
   pointer-events: none;
@@ -244,6 +253,7 @@ i {
   left: 50%;
   transform: translate(-50%, -50%) rotate(-90deg);
   line-height: 1.4;
+  padding-block: 3px;
 }
 .vertical-action i {
   font-weight: 500;
@@ -297,8 +307,7 @@ i {
   width: 100%;
   height: 100%;
   transform-origin: 65% 85%;
-  animation: timber-drift 10.8s cubic-bezier(0.45, 0, 0.55, 1) infinite
-    alternate;
+  animation: timber-drift 16s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
 }
 .desktop-decoration {
   display: none;
@@ -317,21 +326,21 @@ i {
   align-items: center;
   height: 100%;
   width: 100%;
-  --action-height: clamp(52px, 10dvh, 85px);
-  --photo-gap: clamp(16px, 4dvh, 42px);
-  padding-bottom: var(--safe-bottom);
+  padding-top: var(--page-top);
+  padding-bottom: var(--page-bottom);
 }
 #photo-preview {
   display: block;
-  width: 100%;
-  height: auto;
-  max-height: calc(
-    var(--view-height) - var(--action-height) - var(--photo-gap) -
-      var(--safe-bottom) - 12px
+  flex: 0 0 auto;
+  width: min(
+    var(--art-width),
+    calc(var(--art-height) * var(--photo-ratio, 0.6666667))
   );
+  height: auto;
+  max-width: 100%;
+  max-height: var(--art-height);
   object-fit: contain;
   object-position: top center;
-  flex: 0 1 auto;
   min-height: 0;
 }
 .create-area {
@@ -369,10 +378,11 @@ i {
   width: min(50%, 240px);
   height: var(--action-height);
 }
-.back-button {
+.back-button,
+.arrow-button {
   position: absolute;
-  top: max(4%, var(--safe-top));
-  left: 8.2%;
+  top: var(--page-top);
+  left: var(--page-x);
   width: 52px;
   height: 52px;
   padding: 4px;
@@ -380,7 +390,8 @@ i {
   z-index: 5;
   color: var(--icon-color, #0099ff);
 }
-.back-button svg {
+.back-button svg,
+.arrow-button svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -388,16 +399,20 @@ i {
 }
 .finished-art {
   position: absolute;
-  top: max(13%, calc(var(--safe-top) + 36px));
+  top: var(--page-top);
   left: 0;
   right: 0;
-  bottom: 20%;
+  height: var(--art-height);
 }
 .finished-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
   display: block;
+  margin: 0 auto;
+  width: min(var(--art-width), calc(var(--art-height) * 0.8));
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: top center;
 }
 .finish-actions {
   position: absolute;
@@ -439,7 +454,7 @@ i {
   position: absolute;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;
   opacity: 0;
   transition: opacity 0.1s;
 }
@@ -647,6 +662,26 @@ i {
   flex: 1;
   object-fit: contain;
 }
+.record-screen figure {
+  align-items: center;
+  justify-content: center;
+}
+#record-photo.is-portrait {
+  flex: 0 0 auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+  aspect-ratio: 4 / 5;
+}
+.record-navigation .arrow-button {
+  position: static;
+  width: var(--back-size);
+  height: var(--back-size);
+  padding: 4px;
+}
+.arrow-button:disabled {
+  cursor: default;
+}
 .record-navigation {
   display: flex;
   justify-content: space-between;
@@ -654,7 +689,7 @@ i {
   gap: 12px;
 }
 .record-navigation button {
-  min-width: 100px;
+  min-width: 0;
 }
 #gallery,
 #record {
@@ -848,21 +883,6 @@ dialog .text-button {
   .finish-actions .color-button i {
     font-size: 12px;
   }
-  .landing-eyebrow {
-    font-size: 10px;
-  }
-  .landing-enter h1 {
-    font-size: 18px;
-  }
-  .landing-enter h1 i {
-    font-size: 20px;
-  }
-  .landing-enter h1 {
-    top: 39%;
-  }
-  .finished-art {
-    bottom: 26%;
-  }
 }
 @media (min-width: 600px) {
   .info-copy {
@@ -894,13 +914,13 @@ dialog .text-button {
 .gallery-header,
 .record-header {
   position: relative;
-  min-height: calc(var(--title-size) * 2.4125);
+  min-height: calc(var(--back-size) + 12px + var(--title-size) * 2.4125);
 }
 .gallery-header h1,
 .record-header h1 {
   position: absolute;
   left: 0;
-  top: 0;
+  top: calc(var(--back-size) + 12px);
   margin: 0;
   font-size: var(--title-size);
   line-height: 1.2;
@@ -915,41 +935,38 @@ dialog .text-button {
 .record-header .back-button {
   position: absolute;
   top: 0;
-  left: auto;
-  right: 0;
+  left: 0;
+  right: auto;
   width: var(--back-size);
   height: var(--back-size);
 }
 .record-header:has(.text-button:not([hidden])) {
-  min-height: calc(var(--title-size) * 2.4125 + 44px);
+  min-height: calc(var(--back-size) + 12px + var(--title-size) * 2.4125);
 }
 .record-header .text-button {
   position: absolute;
   right: 0;
-  bottom: 0;
+  top: 0;
+  bottom: auto;
 }
 @media (min-width: 1024px) {
   #experience {
     --page-x: 8.45vw;
-    --page-top: max(3.9dvh, var(--safe-top));
+    --page-top: max(2.5dvh, var(--safe-top));
     --page-bottom: max(3dvh, var(--safe-bottom));
-    --title-size: clamp(30px, min(3.2vw, 5dvh), 72px);
+    --title-size: 28px;
     --back-size: clamp(60px, min(6vw, 9dvh), 108px);
     --action-width: clamp(160px, 16vw, 320px);
     --action-gap: clamp(12px, min(1.6vw, 2dvh), 28px);
     --action-height: clamp(80px, 12dvh, 144px);
+    --art-height: calc(
+      var(--view-height) - var(--page-top) - var(--page-bottom)
+    );
+    --art-width: calc(
+      100vw - 2 * (var(--page-x) + var(--action-width) + var(--action-gap))
+    );
   }
-  .landing-eyebrow {
-    font-size: clamp(18px, min(1.8vw, 3dvh), 38px);
-  }
-  .landing-enter h1 {
-    font-size: clamp(28px, min(3.2vw, 5dvh), 68px);
-  }
-  .landing-enter h1 i {
-    font-size: 1.12em;
-    margin-top: 0.45em;
-    line-height: 1.35;
-  }
+
   .landing-enter .landing-marks {
     left: var(--page-x);
     right: auto;
@@ -988,12 +1005,13 @@ dialog .text-button {
     height: var(--back-size);
   }
   .vertical-action {
-    bottom: 23%;
-    font-size: clamp(18px, min(2vw, 3.4dvh), 40px);
+    top: 0;
+    bottom: 22%;
+    font-size: clamp(28px, min(2vw, 3.4dvh), 40px);
   }
   #home {
-    --library-level: 32%;
-    --action-step: 18%;
+    --library-level: 46%;
+    --action-step: 8.5%;
   }
   .logo-bar {
     left: var(--page-x);
@@ -1002,9 +1020,18 @@ dialog .text-button {
     width: min(58vw, 1000px);
     max-width: none;
     max-height: none;
-    height: auto;
+    height: min(18dvh, 180px);
     margin: 0;
     gap: clamp(6px, 1vw, 18px);
+  }
+  .logo-bar .logo-link {
+    height: 100%;
+    min-height: 0;
+  }
+  .logo-bar img {
+    height: 100%;
+    object-fit: contain;
+    object-position: left top;
   }
   .info-copy {
     left: max(var(--page-x), calc((100% - 1080px) / 2));
@@ -1025,20 +1052,7 @@ dialog .text-button {
   .info-copy [lang="en"] {
     margin-top: 0;
   }
-  .photo-content {
-    --action-height: clamp(80px, 12dvh, 144px);
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    padding: max(14dvh, 90px) calc(var(--page-x) + var(--action-width) + 4vw)
-      var(--page-bottom) var(--page-x);
-  }
-  #photo-preview {
-    width: 100%;
-    height: 100%;
-    max-height: 100%;
-    object-position: center;
-  }
+
   .create-area {
     position: absolute;
     top: var(--page-top);
@@ -1070,16 +1084,7 @@ dialog .text-button {
     grid-template-columns: 1fr;
     gap: var(--action-gap);
   }
-  #finish .info-button {
-    left: var(--page-x);
-    right: auto;
-  }
-  .finished-art {
-    top: max(14dvh, 90px);
-    left: var(--page-x);
-    right: calc(var(--page-x) + var(--action-width) + 4vw);
-    bottom: var(--page-bottom);
-  }
+
   .photo-decoration {
     inset: auto;
     left: 0;
@@ -1087,18 +1092,18 @@ dialog .text-button {
     width: clamp(220px, 32vw, 700px);
     height: clamp(200px, 48dvh, 680px);
     object-fit: contain;
-    animation: desktop-drift-one 5.4s ease-in-out infinite alternate;
+    animation: desktop-drift-one 14s ease-in-out infinite alternate;
   }
   .desktop-decoration {
     display: block;
   }
   .photo-decoration:nth-child(2) {
     animation-name: desktop-drift-two;
-    animation-duration: 6.6s;
+    animation-duration: 17s;
   }
   .photo-decoration:nth-child(3) {
     animation-name: desktop-drift-three;
-    animation-duration: 7.8s;
+    animation-duration: 20s;
   }
   .gallery-screen,
   .record-screen {
@@ -1108,31 +1113,31 @@ dialog .text-button {
   .gallery-header,
   .record-header {
     position: relative;
-    min-height: calc(var(--title-size) * 2.461);
+    min-height: calc(var(--back-size) + 12px + var(--title-size) * 2.461);
     gap: 0;
   }
   .record-header:has(.text-button:not([hidden])) {
-    min-height: calc(var(--title-size) * 2.461);
+    min-height: calc(var(--back-size) + 12px + var(--title-size) * 2.461);
   }
   .gallery-header h1,
   .record-header h1 {
     position: absolute;
     left: 0;
-    top: 0;
+    top: calc(var(--back-size) + 12px);
     margin: 0;
   }
   .gallery-header .back-button,
   .record-header .back-button {
     position: absolute;
     top: 0;
-    right: 0;
-    left: auto;
+    right: auto;
+    left: 0;
     width: var(--back-size);
     height: var(--back-size);
   }
   .record-header .text-button {
     position: absolute;
-    right: calc(var(--back-size) + var(--action-gap));
+    right: 0;
     top: 0;
     bottom: auto;
   }
