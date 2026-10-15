@@ -78,7 +78,7 @@ with sync_playwright() as p:
     page.wait_for_function("document.getElementById('archive-status').textContent.includes('온라인 저장 완료')")
     assert page.locator('#error').is_hidden()
     page.goto(BASE+'/#result/'+record_id);page.locator('#record-images').wait_for(state='visible')
-    assert page.locator('#share-record').is_visible()
+    assert page.locator('#share-record').count()==0
     assert data['writes']==1 and data['signup']==1
     assert len(data['attempts'])==6 and set(data['attempts'][:3])==set(data['attempts'][3:]), data['attempts']
     assert sorted(v['type'] for v in data['uploads'].values())==['image/jpeg','image/png','image/png']
@@ -92,7 +92,7 @@ with sync_playwright() as p:
     assert viewer.url==result_url
     for selector in ['#record-photo','#record-arrows']:
         assert viewer.locator(selector).evaluate('(img)=>img.decode().then(()=>img.naturalWidth>0)')
-    assert viewer.locator('#share-record').is_visible()
+    assert viewer.locator('#share-record').count()==0
     assert data['signup']==1 and data['writes']==1 and len(data['lookups'])==1
     # Fin can open the archive before a slow upload completes; completion refreshes page one.
     data['hold_writes']=True

@@ -115,7 +115,8 @@ i {
   height: var(--view-height);
   margin: 0 auto;
   background: var(--paper);
-  position: relative;
+  position: fixed;
+  inset: 0;
 }
 .screen {
   height: 100%;
@@ -629,10 +630,7 @@ i {
   display: block;
   font-size: 15px;
 }
-.record-header .text-button {
-  margin-left: auto;
-  font-size: 11px;
-}
+
 .record-description {
   font-size: 11px;
   line-height: 1.4;
@@ -940,15 +938,7 @@ dialog .text-button {
   width: var(--back-size);
   height: var(--back-size);
 }
-.record-header:has(.text-button:not([hidden])) {
-  min-height: calc(var(--back-size) + 12px + var(--title-size) * 2.4125);
-}
-.record-header .text-button {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: auto;
-}
+
 @media (min-width: 1024px) {
   #experience {
     --page-x: 8.45vw;
@@ -1116,9 +1106,7 @@ dialog .text-button {
     min-height: calc(var(--back-size) + 12px + var(--title-size) * 2.461);
     gap: 0;
   }
-  .record-header:has(.text-button:not([hidden])) {
-    min-height: calc(var(--back-size) + 12px + var(--title-size) * 2.461);
-  }
+
   .gallery-header h1,
   .record-header h1 {
     position: absolute;
@@ -1135,12 +1123,7 @@ dialog .text-button {
     width: var(--back-size);
     height: var(--back-size);
   }
-  .record-header .text-button {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: auto;
-  }
+
   .text-button,
   #gallery-status {
     font-size: clamp(15px, min(1.4vw, 2.7dvh), 26px);
@@ -1240,4 +1223,49 @@ dialog .text-button {
     object-fit: contain;
     object-position: top;
   }
+}
+
+/* Keep viewport painting independent of the safe-area-aware content layout.
+   lvh also covers the space exposed while mobile browser controls collapse. */
+#page-background {
+  position: fixed;
+  top: calc(0px - var(--safe-top));
+  left: 0;
+  width: 100%;
+  height: calc(100vh + var(--safe-top) + var(--safe-bottom));
+  height: calc(100lvh + var(--safe-top) + var(--safe-bottom));
+  background: var(--page-surface, var(--paper));
+  pointer-events: none;
+}
+html[data-screen="home"] #experience,
+html[data-screen="home"] #home {
+  background: transparent;
+}
+#stripe-field {
+  position: fixed;
+  top: calc(0px - var(--safe-top));
+  right: 0;
+  bottom: auto;
+  left: 0;
+  height: calc(100vh + var(--safe-top) + var(--safe-bottom));
+  height: calc(100lvh + var(--safe-top) + var(--safe-bottom));
+}
+/* Both archive views share one header: Back, then the Home-sized title. */
+.gallery-header,
+.record-header {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(10px, 1.4vw, 24px);
+  min-height: max(var(--back-size), calc(var(--title-size) * 2.4125));
+}
+.gallery-header .back-button,
+.record-header .back-button {
+  position: static;
+  flex: 0 0 var(--back-size);
+}
+.gallery-header h1,
+.record-header h1 {
+  position: static;
+  font-size: var(--title-size);
+  line-height: 1.2;
 }

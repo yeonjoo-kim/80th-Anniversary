@@ -1,4 +1,4 @@
-"""Revision 5: full-frame art, fixed type, portrait crop and actual audio rendering.
+"""Revision 6: proportional full-frame art, fixed type, portrait crop and actual audio rendering.
 Chromium touch/iPhone-UA checks do not substitute for physical iPhone Safari listening.
 No service writes: Supabase is disabled in every test context.
 """
@@ -15,7 +15,7 @@ reference=ET.parse(ROOT/'assets/reference/landing-v5.svg').getroot()
 expected=[p.get('d') for p in reference.find('s:g',NS).findall('s:path',NS) if p.get('fill')!='#231815']
 actual=ET.parse(ROOT/'assets/landing.svg').getroot()
 assert len(expected)==5 and [p.get('d') for p in actual.findall('s:path',NS)]==expected
-assert actual.get('preserveAspectRatio')=='none'
+assert actual.get('preserveAspectRatio')=='xMidYMid meet'
 
 def offline(context):
     context.route('**/supabase-config.js',lambda r:r.fulfill(content_type='application/javascript',body='window.SUPABASE_CONFIG=null;'))
@@ -34,11 +34,16 @@ with sync_playwright() as p:
     offline(context)
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(BASE);page.locator('#landing-art svg').wait_for();page.evaluate('document.fonts.ready')
-    assert page.locator('html').get_attribute('data-revision')=='5'
+    assert page.locator('html').get_attribute('data-revision')=='6'
     for w,h in [(320,480),(390,650),(390,844),(430,932),(844,390),(1024,768),(1440,900),(1920,1080)]:
         page.set_viewport_size({'width':w,'height':h})
-        frame=page.locator('#landing-art svg').evaluate('e=>{const m=e.getScreenCTM(),a=new DOMPoint(0,0).matrixTransform(m),b=new DOMPoint(402,874).matrixTransform(m);return{x:a.x,y:a.y,right:b.x,bottom:b.y};}')
-        assert abs(frame['x'])<1 and abs(frame['y'])<1 and abs(frame['right']-w)<1 and abs(frame['bottom']-h)<1,frame
+        page.wait_for_timeout(40)
+        frame=page.locator('#landing-art svg').evaluate('e=>{const m=e.getScreenCTM(),r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,sx:m.a,sy:m.d};}')
+        assert frame['x']==0 and frame['y']==0 and abs(frame['w']-w)<1 and abs(frame['h']-h)<1,frame
+        assert abs(frame['sx']-frame['sy'])<.00001, 'SVG geometry must never stretch'
+        if w>=1024:
+            bounds=page.locator('.landing-arrow').evaluate_all('es=>es.map(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,right:r.right,bottom:r.bottom};})')
+            assert all(b['x']>=-1 and b['y']>=-1 and b['right']<=w+1 and b['bottom']<=h+1 for b in bounds),bounds
         for selector,size in [('.landing-eyebrow',14),('#landing-title',24),('#landing-title i',27)]:
             assert page.locator(selector).evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==size
     page.set_viewport_size({'width':390,'height':844});page.locator('#enter').tap();page.locator('#home').wait_for(state='visible')
@@ -47,8 +52,18 @@ with sync_playwright() as p:
         assert page.locator('#home-title').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==28
         assert 'linear-gradient' in page.locator('html').evaluate('e=>getComputedStyle(e).backgroundImage')
         field=box(page,'#stripe-field')
-        assert field['x']==0 and field['y']==0 and abs(field['width']-w)<1 and abs(field['height']-h)<1
+        assert field['x']==0 and field['y']==0 and abs(field['width']-w)<1 and field['height']>=h
         if w>=1024:assert page.locator('.vertical-action').first.evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')>=28
+    # Simulate non-zero notch/home-indicator insets: only the decoration extends;
+    # controls keep their safe-area positions and the field has no lower gap.
+    page.set_viewport_size({'width':390,'height':844})
+    page.evaluate('document.documentElement.style.setProperty("--safe-top","47px");document.documentElement.style.setProperty("--safe-bottom","34px")')
+    field=box(page,'#stripe-field');surface=box(page,'#page-background')
+    assert field['y']==-47 and field['height']>=844+47+34,field
+    assert surface['y']==-47 and surface['height']>=844+47+34,surface
+    assert box(page,'#home-title')['y']>=47
+    assert page.locator('#experience').evaluate('e=>getComputedStyle(e).position')=='fixed'
+    page.evaluate('document.documentElement.style.removeProperty("--safe-top");document.documentElement.style.removeProperty("--safe-bottom")')
     page.set_viewport_size({'width':390,'height':844})
     page.locator('#library-file').set_input_files({'name':'portrait.png','mimeType':'image/png','buffer':png(80,1600)})
     page.locator('#photo').wait_for(state='visible');page.locator('#photo-preview').evaluate('e=>e.decode()')
@@ -98,13 +113,28 @@ with sync_playwright() as p:
     for i in range(4):
         count=phone.evaluate('audioCues.length');phone.wait_for_timeout(90)
         phone.locator('#close-info' if i%2==0 else '#home .info-button').tap()
-        phone.wait_for_function('n=>audioCues.length>n',arg=count)
+        phone.wait_for_function('n=>audioCues.length===n+1',arg=count)
     assert phone.locator('audio[data-feedback=session]').get_attribute('src')==source
     assert not phone.evaluate('mediaPauses'),phone.evaluate('mediaPauses')
     assert len(set(phone.evaluate('audioCues.map(c=>c.args[1])')))>1
     phone.evaluate('observedContext.suspend()')
     count=phone.evaluate('audioCues.length');phone.wait_for_timeout(90);phone.locator('#close-info').tap()
     phone.wait_for_function('n=>observedContext.state==="running"&&audioCues.length>n',arg=count)
+    # Button activation is the only cue source. Background taps, stripes,
+    # pointer hover/drag, keyboard focus, logo links and scroll remain silent.
+    count=phone.evaluate('audioCues.length');phone.wait_for_timeout(100)
+    phone.locator('#home .info-button').hover()
+    phone.locator('#home .info-button').focus();phone.keyboard.press('Tab')
+    phone.mouse.click(370,180)
+    phone.mouse.move(370,190);phone.mouse.down();phone.mouse.move(280,190,steps=5);phone.mouse.up()
+    phone.locator('.logo-bar a').first.evaluate('e=>e.addEventListener("click",event=>event.preventDefault())')
+    phone.locator('.logo-bar a').first.click()
+    phone.evaluate('location.hash="#archive"');phone.locator('#gallery').wait_for(state='visible')
+    phone.locator('#gallery-scroll').dispatch_event('wheel',{'deltaY':100})
+    phone.locator('#gallery-scroll').dispatch_event('touchmove')
+    phone.wait_for_timeout(200)
+    assert phone.evaluate('audioCues.length')==count
+    assert phone.locator('#share-record').count()==0
     assert not errors,errors
     ios.close()
     # Without Web Audio, the AAC click drains its silent tail and reaches ended naturally.
