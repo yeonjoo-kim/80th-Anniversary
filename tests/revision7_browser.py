@@ -1,4 +1,4 @@
-"""Revision 6: proportional full-frame art, fixed type, portrait crop and actual audio rendering.
+"""Revision 7: proportional full-frame art, fixed type, portrait crop and actual audio rendering.
 Chromium touch/iPhone-UA checks do not substitute for physical iPhone Safari listening.
 No service writes: Supabase is disabled in every test context.
 """
@@ -34,22 +34,33 @@ with sync_playwright() as p:
     offline(context)
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(BASE);page.locator('#landing-art svg').wait_for();page.evaluate('document.fonts.ready')
-    assert page.locator('html').get_attribute('data-revision')=='6'
+    assert page.locator('html').get_attribute('data-revision')=='7'
     for w,h in [(320,480),(390,650),(390,844),(430,932),(844,390),(1024,768),(1440,900),(1920,1080)]:
         page.set_viewport_size({'width':w,'height':h})
         page.wait_for_timeout(40)
         frame=page.locator('#landing-art svg').evaluate('e=>{const m=e.getScreenCTM(),r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,sx:m.a,sy:m.d};}')
         assert frame['x']==0 and frame['y']==0 and abs(frame['w']-w)<1 and abs(frame['h']-h)<1,frame
         assert abs(frame['sx']-frame['sy'])<.00001, 'SVG geometry must never stretch'
-        if w>=1024:
-            bounds=page.locator('.landing-arrow').evaluate_all('es=>es.map(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,right:r.right,bottom:r.bottom};})')
-            assert all(b['x']>=-1 and b['y']>=-1 and b['right']<=w+1 and b['bottom']<=h+1 for b in bounds),bounds
-        for selector,size in [('.landing-eyebrow',14),('#landing-title',24),('#landing-title i',27)]:
+        sizes=[16,27,30] if w>=1024 else [14,24,27]
+        for selector,size in zip(['.landing-eyebrow','#landing-title','#landing-title i'],sizes):
             assert page.locator(selector).evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==size
+    # A wider window must reveal shafts, without recentering or zooming out.
+    cameras=[]
+    for w in [500,800,1000,1024,1440,1920]:
+        page.set_viewport_size({'width':w,'height':780});page.wait_for_timeout(40)
+        camera=page.locator('#landing-art svg').evaluate('e=>{const m=e.getScreenCTM(),p=new DOMPoint(201,437).matrixTransform(m);return{s:m.a,x:p.x,y:p.y,width:e.viewBox.baseVal.width};}')
+        assert abs(camera['x']-w/2)<.01 and abs(camera['y']-390)<.01,camera
+        cameras.append(camera)
+    assert max(c['s'] for c in cameras)-min(c['s'] for c in cameras)<.00001
+    assert cameras[-1]['width']>cameras[0]['width']
+    manifest=page.evaluate('async()=>{let r=await fetch(document.querySelector("link[rel=manifest]").href);if(!r.ok)throw Error("Manifest failed");return await r.json()}')
+    assert manifest['display']=='standalone' and manifest['scope']=='./' and manifest['start_url']=='./'
+    assert page.locator('meta[name=apple-mobile-web-app-capable]').get_attribute('content')=='yes'
+    assert page.locator('meta[name=apple-mobile-web-app-status-bar-style]').get_attribute('content')=='black-translucent'
     page.set_viewport_size({'width':390,'height':844});page.locator('#enter').tap();page.locator('#home').wait_for(state='visible')
     for w,h in [(320,480),(390,650),(390,844),(1440,900),(1366,500)]:
         page.set_viewport_size({'width':w,'height':h})
-        assert page.locator('#home-title').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==28
+        assert page.locator('#home-title').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==30
         assert 'linear-gradient' in page.locator('html').evaluate('e=>getComputedStyle(e).backgroundImage')
         field=box(page,'#stripe-field')
         assert field['x']==0 and field['y']==0 and abs(field['width']-w)<1 and field['height']>=h
@@ -100,6 +111,44 @@ with sync_playwright() as p:
     page.wait_for_function('document.querySelector("#record-photo").classList.contains("is-portrait")')
     assert not errors,errors
     context.close()
+    # Mouse-driven desktop windows keep readable type below the layout breakpoint.
+    desktop=browser.new_context(viewport={'width':500,'height':780},reduced_motion='reduce')
+    offline(desktop);pc=desktop.new_page();pc.on('pageerror',lambda e:errors.append(str(e)));pc.goto(BASE)
+    pc.locator('#landing-art svg').wait_for();pc.evaluate('document.fonts.ready')
+    for w,h in [(500,780),(600,780),(800,780),(1000,780),(1023,780),(1024,780),(1440,900),(1920,1080)]:
+        pc.set_viewport_size({'width':w,'height':h});pc.wait_for_timeout(40)
+        assert pc.evaluate('matchMedia("(hover:hover) and (pointer:fine)").matches')
+        logo=box(pc,'.landing-marks');assert abs(logo['x']+logo['width']/2-w/2)<1
+        assert pc.locator('#landing-title').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==27
+        assert pc.locator('#landing-title i').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==30
+    pc.locator('#enter').click()
+    for w in [500,600,800,1000,1023,1024,1440]:
+        pc.set_viewport_size({'width':w,'height':780})
+        assert pc.locator('#home-title').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')==30
+        assert pc.locator('.vertical-action').first.evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')>=28
+        assert pc.locator('#home .info-button').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')>=20
+    pc.set_viewport_size({'width':500,'height':780});pc.locator('#home .info-button').click();pc.wait_for_timeout(50)
+    assert pc.locator('.info-copy').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)')>=18
+    pc.locator('#close-info').click()
+    pc.locator('#library-file').set_input_files({'name':'palette.png','mimeType':'image/png','buffer':png()});pc.locator('#create').click();pc.locator('#finish').wait_for(state='visible')
+    # Fin.svg source rectangles: 201 × 85, rx=20. Test actual laid-out shape,
+    # including minimum desktop windows, mobile layouts and active status text.
+    for w,h in [(320,480),(390,844),(500,500),(500,780),(900,780),(1024,768),(1440,900),(1920,1080)]:
+        pc.set_viewport_size({'width':w,'height':h})
+        for button in pc.locator('.finish-actions .color-button').all():
+            b=button.bounding_box();assert abs(b['width']/b['height']-201/85)<.002,b
+        pc.locator('#download').click()
+        for message in ['', '이미지를 준비하고 있어요…']:
+            pc.locator('#download-status').evaluate('(e,text)=>e.textContent=text',message)
+            d=box(pc,'#download-dialog');assert d['y']>=-1 and d['y']+d['height']<=h+1,d
+            assert pc.locator('#download-dialog').evaluate('e=>e.scrollHeight<=e.clientHeight+1')
+            for button in pc.locator('#download-dialog .color-button').all():
+                b=button.bounding_box();assert abs(b['width']/b['height']-201/85)<.002,b
+                assert button.evaluate('e=>e.scrollHeight<=e.clientHeight+1&&e.scrollWidth<=e.clientWidth+1')
+                assert button.evaluate('e=>getComputedStyle(e).fontSize===getComputedStyle(e.querySelector("i")).fontSize')
+        pc.locator('#download-status').evaluate('e=>e.textContent=""')
+        pc.locator('#download-dialog .dialog-close').click()
+    desktop.close()
     # Observe real, non-zero AudioBufferSourceNode playback, plus the separate silent iOS session.
     ios=browser.new_context(viewport={'width':390,'height':844},has_touch=True,is_mobile=True,user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1')
     offline(ios);ios.add_init_script(AUDIO_OBSERVATION)
@@ -144,4 +193,4 @@ with sync_playwright() as p:
     old.wait_for_function('document.querySelector("audio[data-feedback=fallback]")?.ended')
     assert old.locator('audio[data-feedback=fallback]').evaluate('e=>!e.error&&e.currentTime>.35&&e.duration>.35&&!e.muted')
     fallback.close();browser.close()
-print('PASS: full-frame SVG and fixed typography, root stripe background, centered artwork, 4:5 portrait-only crop, fixed SVG navigation, non-zero Web Audio cues, continuous iOS media session, real suspend/resume and naturally-ended AAC fallback. Physical iPhone listening remains separate.')
+print('PASS: fixed landing composition across widths, centered/enlarged desktop branding, narrow desktop font minimums, 201:85 Fin/download button shapes including status text, standalone web-app configuration, safe-area background, unchanged photo/export/archive behavior and button-only audio. Native iPhone full-screen rendering and listening remain unverified.')

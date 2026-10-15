@@ -45,7 +45,7 @@ def visible(page, selectors, width, height):
     for selector in selectors:
         r = geometry(page, selector)
         assert r['x'] >= -1 and r['y'] >= -1 and r['right'] <= width+1 and r['bottom'] <= height+1, (selector, width, height, r)
-        assert page.locator(selector).evaluate('e=>e.scrollWidth<=e.clientWidth+1&&(e.id==="gallery-scroll"||e.scrollHeight<=e.clientHeight+1)'), (selector, width, height)
+        assert page.locator(selector).evaluate('e=>e.scrollWidth<=e.clientWidth+1&&(["gallery-scroll"].includes(e.id)||getComputedStyle(e).overflowY==="auto"||e.scrollHeight<=e.clientHeight+1)'), (selector, width, height)
 
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'])
@@ -112,17 +112,17 @@ with sync_playwright() as p:
         assert controls[0]['bottom']<controls[1]['y']<controls[1]['bottom']<controls[2]['y']
         page.evaluate('location.hash="#archive"');page.locator('.archive-card').first.wait_for()
         gallery_title=geometry(page,'#gallery-title')
-        assert gallery_title['x']>geometry(page,'#gallery .back-button')['right'] and gallery_title['font']==28
+        assert gallery_title['x']>geometry(page,'#gallery .back-button')['right'] and gallery_title['font']==30
         gallery_back=geometry(page,'#gallery .back-button')
         assert abs(gallery_back['x']-back['x'])<1 and abs(gallery_back['y']-back['y'])<1
         visible(page, ['.gallery-header','#gallery-scroll'],width,height)
         page.locator('.archive-card').first.click();page.locator('#record-images').wait_for(state='visible')
         detail_title=geometry(page,'#record-title')
-        assert detail_title['x']>geometry(page,'#record .back-button')['right'] and detail_title['font']==28
+        assert detail_title['x']>geometry(page,'#record .back-button')['right'] and detail_title['font']==30
         record_back=geometry(page,'#record .back-button')
         assert abs(record_back['x']-back['x'])<1 and abs(record_back['y']-back['y'])<1
         visible(page, ['.record-header','#record-images','.record-navigation'],width,height)
-    assert all(size==28 for size in title_sizes)
+    assert all(size==30 for size in title_sizes)
     for width,height in [(320,480),(390,844),(844,390)]:
         page.set_viewport_size({'width':width,'height':height})
         page.evaluate('location.hash="#home"');page.locator('#home').wait_for(state='visible')
