@@ -906,10 +906,10 @@
     await backReady;
     const type = withType ? await posterType() : null;
     const thumbnail = withType
-      ? `<image x="61" y="544" width="37" height="56" preserveAspectRatio="xMidYMid slice" href="${await dataURL(photo)}"/>`
+      ? `<image data-layer="poster-photo" x="61" y="544" width="37" height="56" preserveAspectRatio="xMidYMid slice" href="${await dataURL(photo)}"/>`
       : "";
     const typeLayer = type
-      ? `<g data-layer="poster-typography" transform="translate(${EXPORT_FRAME.width / 2 - type.centerX} ${EXPORT_FRAME.y + EXPORT_FRAME.height / 2 - type.centerY})">${type.markup}${thumbnail}</g>`
+      ? `<g data-layer="poster-typography" transform="translate(${EXPORT_FRAME.width / 2 - type.centerX} ${EXPORT_FRAME.y + EXPORT_FRAME.height / 2 - type.centerY})">${type.markup}</g>${thumbnail}`
       : "";
     await document.fonts.load('18px "Panchi Mono"');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${EXPORT_WIDTH}" height="${EXPORT_HEIGHT}" viewBox="0 140 402 502.5"><rect x="0" y="140" width="402" height="502.5" fill="#EEEEEF"/>${arrowMarkup(result)}${typeLayer}</svg>`;
