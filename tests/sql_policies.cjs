@@ -53,6 +53,9 @@ before(async () => {
   );
   await db.exec(archive);
   await db.exec(archive);
+  const deletion = fs.readFileSync(path.join(__dirname, "../supabase/deletion.sql"), "utf8");
+  await db.exec(deletion);
+  await db.exec(deletion);
   for (const [id, ready] of [
     [ID, true],
     [DRAFT, false],
@@ -265,4 +268,27 @@ test("archive pagination is deterministic and request sizes are bounded", async 
     ).rows.length,
     0,
   );
+});
+
+test("deletion is owner-only, hides the public row first, and finishes only after file removal", async () => {
+  const id = "00000000-0000-4000-8000-000000000099";
+  const paths = ["photo.jpg", "arrows.png", "poster.png"].map(f => `${OWNER}/${id}/${f}`);
+  await db.query(`insert into public.creations(id,owner_id,captured_at,ready,photo_path,arrows_path,poster_path)
+    values ($1,$2,now(),true,$3,$4,$5)`, [id,OWNER,...paths]);
+  for (const name of paths) await db.query("insert into storage.objects(bucket_id,name) values ('trajectory-images',$1)",[name]);
+  await assert.rejects(() => role("anon", null, "select * from public.prepare_creation_deletion($1)",[id]));
+  await assert.rejects(() => role("authenticated", OTHER, "select * from public.prepare_creation_deletion($1)",[id]));
+  await assert.rejects(() => role("authenticated", OTHER, "select public.finish_creation_deletion($1)",[id]));
+  assert.equal((await role("anon",null,"select * from public.get_creation($1)",[id])).rows.length,1);
+  assert.equal((await role("authenticated",OTHER,"delete from storage.objects where name=any($1) returning name",[paths])).rows.length,0);
+  const prepared = await role("authenticated",OWNER,"select * from public.prepare_creation_deletion($1)",[id]);
+  assert.deepEqual(Object.values(prepared.rows[0]),paths);
+  assert.equal((await role("anon",null,"select * from public.get_creation($1)",[id])).rows.length,0);
+  await assert.rejects(() => role("authenticated",OWNER,"select public.finish_creation_deletion($1)",[id]));
+  // Simulate the Storage API removing metadata, under its real per-owner policy.
+  assert.equal((await role("authenticated",OWNER,"delete from storage.objects where name=any($1) returning name",[paths])).rows.length,3);
+  assert.equal((await role("authenticated",OWNER,"select public.finish_creation_deletion($1) as done",[id])).rows[0].done,true);
+  assert.equal((await role("authenticated",OWNER,"select public.finish_creation_deletion($1) as done",[id])).rows[0].done,true);
+  assert.equal((await db.query("select * from public.creations where id=$1",[id])).rows.length,0);
+  await assert.rejects(() => role("authenticated",OWNER,"delete from public.creations where id=$1",[ID]));
 });
