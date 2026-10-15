@@ -57,8 +57,8 @@ with sync_playwright() as p:
     page.on('pageerror', lambda e:errors.append(str(e)))
     page.goto(BASE+'/#home')
     page.evaluate('document.fonts.ready')
-    assert page.locator('link[rel="icon"][type="image/svg+xml"]').get_attribute('href') == 'assets/favicon.svg'
-    assert page.locator('link[rel="apple-touch-icon"]').get_attribute('href') == 'assets/apple-touch-icon.png'
+    assert page.locator('link[rel="icon"][type="image/svg+xml"]').get_attribute('href') == 'assets/favicon.svg?v=2'
+    assert page.locator('link[rel="apple-touch-icon"]').get_attribute('href') == 'assets/apple-touch-icon.png?v=2'
     assert page.locator('a[href*="bcsai1010"]').count() == 0
     page.locator('#library-file').set_input_files({'name':'palette.png','mimeType':'image/png','buffer':png()})
     page.locator('#photo').wait_for(state='visible')

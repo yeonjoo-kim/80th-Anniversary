@@ -21,7 +21,7 @@ def run(*args, data=None, env=None):
 
 def workflow(commit):
     files = ['index.html', 'app.js', 'archive.js', 'styles.css',
-             'assets/audio/feedback-sprite.wav', 'assets/back-arrows.json', 'assets/favicon.svg',
+             'assets/audio/feedback-sprite.wav', 'assets/back-arrows.json', 'assets/favicon.svg', 'assets/favicon-32.png',
              'assets/process-1.svg', 'assets/photo-decoration.svg', 'assets/apple-touch-icon.png',
              'assets/landing.svg', 'assets/delete.svg', 'manifest.webmanifest', 'assets/audio/session-silence.m4a',
              *[f'assets/audio/tap-{i}.m4a' for i in range(1,9)]]
