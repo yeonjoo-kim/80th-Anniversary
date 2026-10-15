@@ -862,7 +862,7 @@
         );
         if (!source) throw new Error("Arrow artwork unavailable");
         const [x, y] = source.origin;
-        return `<g data-arrow-source="${source.number}" fill="${arrow.hex}" opacity="${arrow.opacity}" transform="translate(62 407) scale(.64) translate(${-x} ${-y})"><path d="${source.path}" transform="${source.transform}"/></g>`;
+        return `<g data-arrow-source="${source.number}" fill="${arrow.hex}" opacity="${arrow.opacity}" transform="translate(62 382) scale(.6) translate(${-x} ${-y})"><path d="${source.path}" transform="${source.transform}"/></g>`;
       })
       .join("");
   }
