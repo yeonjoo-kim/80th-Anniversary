@@ -130,45 +130,41 @@
     audioDecoding,
     nextSound = 0;
   const soundCues = [
-    [0.97, 0.075],
-    [1.07, 0.075],
-    [1.169, 0.075],
-    [1.27, 0.085],
-    [1.405, 0.085],
-    [1.544, 0.085],
-    [1.758, 0.085],
-    [2.295, 0.085],
+    [0, 0.075],
+    [0.3, 0.075],
+    [0.6, 0.075],
+    [0.9, 0.085],
+    [1.2, 0.085],
+    [1.5, 0.085],
+    [1.8, 0.085],
+    [2.1, 0.085],
   ];
   let mediaBackend =
     /iP(hone|ad|od)/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
     !(window.AudioContext || window.webkitAudioContext);
   let mediaAudio,
-    mediaActivated = false;
-  const mediaPaths = soundCues.map(
-    (_, i) => new URL(`assets/audio/tap-${i + 1}.wav`, document.baseURI).href,
-  );
-  let readyMediaPaths = mediaPaths;
+    mediaActivated = false,
+    mediaTimer,
+    mediaSerial = 0,
+    mediaBlobURL;
+  const feedbackAudioURL = "assets/audio/feedback-sprite.wav";
   if (mediaBackend) {
-    // One persistent media element retains Safari's user-gesture permission between clips.
+    // Keep one source loaded. Replacing src on every short tap makes Safari reload it.
     ensureMediaAudio();
-    void Promise.all(
-      mediaPaths.map(async (path) => {
-        try {
-          const response = await fetch(path);
-          return response.ok
-            ? URL.createObjectURL(await response.blob())
-            : path;
-        } catch {
-          return path;
-        }
-      }),
-    ).then((paths) => {
-      readyMediaPaths = paths;
-    });
   }
-  const audioBytes = fetch("assets/audio/revolver-spin.mp3")
+  const audioBytes = fetch(feedbackAudioURL)
     .then((r) => (r.ok ? r.arrayBuffer() : null))
+    .then((bytes) => {
+      if (bytes && mediaBackend) {
+        // Fully buffered local media supports seeking even when a host lacks byte ranges.
+        mediaBlobURL = URL.createObjectURL(
+          new Blob([bytes], { type: "audio/wav" }),
+        );
+        if (!mediaSerial) ensureMediaAudio().src = mediaBlobURL;
+      }
+      return bytes;
+    })
     .catch(() => null);
   function playbackSession() {
     try {
@@ -178,7 +174,7 @@
   function ensureMediaAudio() {
     playbackSession();
     if (!mediaAudio) {
-      mediaAudio = new Audio(mediaPaths[0]);
+      mediaAudio = new Audio(feedbackAudioURL);
       mediaAudio.preload = "auto";
       mediaAudio.hidden = true;
       mediaAudio.dataset.feedback = "true";
@@ -191,7 +187,11 @@
   function primeAudio() {
     playbackSession();
     if (mediaBackend) {
-      ensureMediaAudio();
+      const element = ensureMediaAudio();
+      // A slow first visit can finish buffering after the first tap. Switch once,
+      // in the next trusted gesture, then retain this source for subsequent taps.
+      if (mediaBlobURL && element.src !== mediaBlobURL)
+        element.src = mediaBlobURL;
       return Promise.resolve();
     }
     try {
@@ -220,23 +220,38 @@
   }
   function playMedia(index) {
     const element = ensureMediaAudio();
-    const source = readyMediaPaths[index];
-    if (element.src !== source) element.src = source;
-    else {
-      element.pause();
-      element.currentTime = 0;
-    }
+    const serial = ++mediaSerial;
+    const [offset, duration] = soundCues[element.readyState ? index : 0];
+    clearTimeout(mediaTimer);
+    element.pause();
+    try {
+      element.currentTime = offset;
+    } catch {}
     element.muted = false;
     element.volume = 1;
     const attempt = element.play();
     attempt
       ?.then(() => {
+        if (serial !== mediaSerial) return;
         mediaActivated = true;
+        // Each clip has a silence guard, so a delayed timer cannot play the next click.
+        mediaTimer = setTimeout(
+          () => {
+            if (serial === mediaSerial) element.pause();
+          },
+          (duration + 0.025) * 1000,
+        );
       })
       .catch(() => {
-        mediaActivated = false;
+        if (serial === mediaSerial) mediaActivated = false;
       });
   }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) return;
+    clearTimeout(mediaTimer);
+    mediaSerial++;
+    mediaAudio?.pause();
+  });
   function feedback({ vibrate = true, unlock = true } = {}) {
     const resumed = unlock ? primeAudio() : Promise.resolve();
     if (
@@ -634,6 +649,7 @@
         svg.setAttribute("viewBox", arrow.viewBox);
         svg.setAttribute("aria-hidden", "true");
         path.setAttribute("d", arrow.path);
+        path.setAttribute("transform", arrow.transform);
         path.setAttribute("fill", "currentColor");
         svg.append(path);
         button.replaceChildren(svg);
@@ -838,74 +854,15 @@
     const part = (type) => parts.find((p) => p.type === type).value;
     return `${part("year")}/${part("month")}/${part("day")}`;
   }
-  const routes = [
-    [
-      [62, 407],
-      [154, 407],
-      [154, 215],
-    ],
-    [
-      [62, 407],
-      [154, 407],
-      [246, 225],
-    ],
-    [
-      [62, 407],
-      [344, 407],
-    ],
-    [
-      [62, 407],
-      [154, 407],
-      [275, 525],
-    ],
-    [
-      [62, 407],
-      [154, 407],
-      [154, 595],
-    ],
-    [
-      [62, 407],
-      [154, 407],
-      [65, 530],
-    ],
-    [
-      [62, 407],
-      [154, 407],
-      [154, 345],
-      [65, 345],
-    ],
-    [
-      [62, 407],
-      [154, 407],
-      [154, 330],
-      [67, 245],
-    ],
-  ];
   function arrowMarkup(result) {
     return result.active
       .map((arrow) => {
-        const pts = routes[arrow.dir].map((p) => [...p]);
-        // Measured color centroid changes the final arrow's reach without leaving the poster margins.
-        const variation = Math.max(
-          -12,
-          Math.min(12, (arrow.coverage - 0.2) * 32),
+        const source = backArrows.find(
+          (shape) => shape.direction === arrow.dir,
         );
-        const tip = pts.at(-1),
-          before = pts.at(-2);
-        let dx = tip[0] - before[0],
-          dy = tip[1] - before[1],
-          len = Math.hypot(dx, dy);
-        const ux = dx / len,
-          uy = dy / len;
-        tip[0] += ux * variation;
-        tip[1] += uy * variation;
-        const path = pts.map((p, i) => (i ? "L" : "M") + p.join(" ")).join(" "),
-          x = tip[0],
-          y = tip[1],
-          head = 28,
-          wing = 26;
-        const headPath = `M${x - ux * head - uy * wing} ${y - uy * head + ux * wing}L${x} ${y}L${x - ux * head + uy * wing} ${y - uy * head - ux * wing}`;
-        return `<g fill="none" stroke="${arrow.hex}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" opacity="${arrow.opacity}"><path d="${path}"/><path d="${headPath}"/></g>`;
+        if (!source) throw new Error("Arrow artwork unavailable");
+        const [x, y] = source.origin;
+        return `<g data-arrow-source="${source.number}" fill="${arrow.hex}" opacity="${arrow.opacity}" transform="translate(62 407) scale(.64) translate(${-x} ${-y})"><path d="${source.path}" transform="${source.transform}"/></g>`;
       })
       .join("");
   }
@@ -946,6 +903,7 @@
     EXPORT_HEIGHT = 1500;
   const EXPORT_FRAME = { x: 0, y: 140, width: 402, height: 502.5 };
   async function artifact(result, createdAt, photo, withType) {
+    await backReady;
     const type = withType ? await posterType() : null;
     const thumbnail = withType
       ? `<image x="61" y="544" width="37" height="56" preserveAspectRatio="xMidYMid slice" href="${await dataURL(photo)}"/>`
@@ -953,7 +911,7 @@
     const typeLayer = type
       ? `<g data-layer="poster-typography" transform="translate(${EXPORT_FRAME.width / 2 - type.centerX} ${EXPORT_FRAME.y + EXPORT_FRAME.height / 2 - type.centerY})">${type.markup}${thumbnail}</g>`
       : "";
-    await document.fonts.load('25px "Panchi Mono"');
+    await document.fonts.load('18px "Panchi Mono"');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${EXPORT_WIDTH}" height="${EXPORT_HEIGHT}" viewBox="0 140 402 502.5"><rect x="0" y="140" width="402" height="502.5" fill="#EEEEEF"/>${arrowMarkup(result)}${typeLayer}</svg>`;
     const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     try {
@@ -966,9 +924,9 @@
         EXPORT_WIDTH / EXPORT_FRAME.width,
         EXPORT_HEIGHT / EXPORT_FRAME.height,
       );
-      ctx.translate(247, 594 - EXPORT_FRAME.y);
+      ctx.translate(283, 558 - EXPORT_FRAME.y);
       ctx.rotate(-Math.PI / 6);
-      ctx.font = '25px "Panchi Mono"';
+      ctx.font = '18px "Panchi Mono"';
       ctx.fillStyle = "#4400FF";
       ctx.fillText(dateStamp(createdAt), 0, 0);
       ctx.restore();
