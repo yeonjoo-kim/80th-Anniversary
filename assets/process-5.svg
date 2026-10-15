@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="402" height="874" viewBox="0 0 402 874" fill="none">
+<g clip-path="url(#clip0_521_1409)">
+<rect width="402" height="874" fill="#EEEEEF" />
+<rect opacity="0.8" x="3.27344" y="313.028" width="109" height="34" transform="rotate(-30 3.27344 313.028)" fill="#FF0095" fill-opacity="0.7" />
+<rect opacity="0.8" width="110" height="34" transform="matrix(0.866025 -0.5 0.499999 0.866026 97.6702 258.528)" fill="#C800FF" fill-opacity="0.7" />
+<rect width="109" height="34" transform="matrix(0.866025 -0.5 0.499999 0.866026 192.933 203.528)" fill="#B8A391" />
+<rect width="109" height="34" transform="matrix(0.866025 -0.5 0.499999 0.866026 287.33 149.028)" fill="#753245" fill-opacity="0.7" />
+<rect width="109" height="34" transform="matrix(1 1.41704e-09 -1.34837e-06 1 -17.5 638.5)" fill="#FAC119" />
+<rect width="109" height="34" transform="matrix(1 1.41704e-09 -1.34837e-06 1 91.5 638.5)" fill="#C6C7C9" fill-opacity="0.7" />
+<rect width="110" height="34" transform="matrix(1 1.41704e-09 -1.34837e-06 1 200.5 638.5)" fill="#0099FF" fill-opacity="0.5" />
+<rect width="109" height="34" transform="matrix(1 1.41704e-09 -1.34837e-06 1 310.5 638.5)" fill="#508D47" fill-opacity="0.7" />
+</g>
+<defs>
+<clipPath id="clip0_521_1409">
+<rect width="402" height="874" fill="white" />
+</clipPath>
+</defs>
+</svg>

@@ -1,0 +1,259 @@
+/* Atomic local archive and Supabase REST adapter. No external SDK is required. */
+(() => {
+  "use strict";
+  const DB_NAME = "snu-art-80",
+    STORE = "creations";
+  const SESSION_KEY = "trajectory-supabase-session-v1";
+  const UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let databasePromise, authPromise, session;
+  const config = () => window.SUPABASE_CONFIG;
+  const configured = () =>
+    Boolean(config()?.url && config()?.publishableKey && config()?.bucket);
+  function database() {
+    if (!databasePromise)
+      databasePromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () =>
+          req.result.createObjectStore(STORE, { keyPath: "id" });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      }).catch((error) => {
+        databasePromise = null;
+        throw error;
+      });
+    return databasePromise;
+  }
+  async function localSave(record) {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(record);
+      tx.oncomplete = () => resolve(record);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("Local save aborted"));
+    });
+  }
+  async function localGet(id) {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(STORE).objectStore(STORE).get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  function baseURL() {
+    if (!configured()) throw new Error("supabase/not-configured");
+    const url = new URL(config().url);
+    if (url.protocol !== "https:" || !url.hostname.endsWith(".supabase.co"))
+      throw new Error("Invalid Supabase URL");
+    return url.origin;
+  }
+  async function request(path, { token, headers, ...options } = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    try {
+      const response = await fetch(baseURL() + path, {
+        ...options,
+        credentials: "omit",
+        signal: controller.signal,
+        headers: {
+          apikey: config().publishableKey,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...headers,
+        },
+      });
+      if (!response.ok) {
+        let detail = {};
+        try {
+          detail = await response.json();
+        } catch {}
+        const error = new Error(
+          detail.msg || detail.message || "Online archive request failed",
+        );
+        error.code =
+          detail.code || detail.error_code || String(response.status);
+        error.status = response.status;
+        throw error;
+      }
+      if (response.status === 204) return null;
+      const text = await response.text();
+      return text ? JSON.parse(text) : null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  function rememberSession(value) {
+    if (
+      !value?.access_token ||
+      !value.refresh_token ||
+      !UUID.test(value.user?.id) ||
+      !(value.expires_at || value.expires_in)
+    ) {
+      throw new Error("Invalid anonymous session");
+    }
+    session = {
+      access_token: value.access_token,
+      refresh_token: value.refresh_token,
+      expires_at:
+        value.expires_at || Math.floor(Date.now() / 1000) + value.expires_in,
+      user: { id: value.user.id },
+    };
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    } catch {}
+    return session;
+  }
+  async function authenticatedSession() {
+    if (authPromise) return authPromise;
+    authPromise = (async () => {
+      if (!session) {
+        try {
+          session = JSON.parse(localStorage.getItem(SESSION_KEY));
+        } catch {}
+      }
+      if (
+        session?.access_token &&
+        UUID.test(session.user?.id) &&
+        session.expires_at > Date.now() / 1000 + 60
+      )
+        return session;
+      if (session?.refresh_token) {
+        try {
+          return rememberSession(
+            await request("/auth/v1/token?grant_type=refresh_token", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ refresh_token: session.refresh_token }),
+            }),
+          );
+        } catch (error) {
+          if (error.status !== 400 && error.status !== 401) throw error;
+          session = null;
+          try {
+            localStorage.removeItem(SESSION_KEY);
+          } catch {}
+        }
+      }
+      // A publishable key identifies the app. Anonymous Auth grants this visitor a private upload identity.
+      return rememberSession(
+        await request("/auth/v1/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        }),
+      );
+    })();
+    try {
+      return await authPromise;
+    } finally {
+      authPromise = null;
+    }
+  }
+  function imageURL(path) {
+    const segments = path.split("/");
+    if (
+      segments.length !== 3 ||
+      !UUID.test(segments[0]) ||
+      !UUID.test(segments[1]) ||
+      !["photo.jpg", "arrows.png", "poster.png"].includes(segments[2])
+    )
+      throw new Error("Invalid archive image path");
+    return (
+      baseURL() +
+      "/storage/v1/object/public/" +
+      encodeURIComponent(config().bucket) +
+      "/" +
+      segments.map(encodeURIComponent).join("/")
+    );
+  }
+  function cloudFromRow(row) {
+    if (!UUID.test(row.id) || !Number.isFinite(Date.parse(row.captured_at)))
+      throw new Error("Invalid archive record");
+    const paths = {
+      photo: row.photo_path,
+      arrows: row.arrows_path,
+      poster: row.poster_path,
+    };
+    const cloud = { provider: "supabase" };
+    for (const [kind, path] of Object.entries(paths)) {
+      if (
+        path.split("/")[1] !== row.id ||
+        !path.endsWith(kind === "photo" ? "/photo.jpg" : `/${kind}.png`)
+      )
+        throw new Error("Invalid archive record path");
+      cloud[kind + "Url"] = imageURL(path);
+    }
+    return cloud;
+  }
+  async function onlineSave(record) {
+    if (!UUID.test(record.id)) throw new Error("Invalid record ID");
+    const auth = await authenticatedSession();
+    const files = {
+      photo: ["photo.jpg", record.photo],
+      arrows: ["arrows.png", record.arrows],
+      poster: ["poster.png", record.poster],
+    };
+    const paths = {};
+    // Wait for every upload to settle before retrying or publishing a completed result.
+    const uploads = await Promise.allSettled(
+      Object.entries(files).map(async ([kind, [filename, blob]]) => {
+        const path = `${auth.user.id}/${record.id}/${filename}`;
+        await request(
+          `/storage/v1/object/${encodeURIComponent(config().bucket)}/${path}`,
+          {
+            token: auth.access_token,
+            method: "POST",
+            body: blob,
+            headers: {
+              "Content-Type": blob.type,
+              "Cache-Control": "max-age=3600",
+              "x-upsert": "true",
+            },
+          },
+        );
+        paths[kind + "_path"] = path;
+      }),
+    );
+    const failure = uploads.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+    const row = {
+      id: record.id,
+      owner_id: auth.user.id,
+      captured_at: record.createdAt,
+      ready: true,
+      ...paths,
+    };
+    await request("/rest/v1/creations?on_conflict=id", {
+      token: auth.access_token,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify(row),
+    });
+    record.cloud = cloudFromRow(row);
+    return record;
+  }
+  async function onlineGet(id) {
+    if (!UUID.test(id)) throw new Error("Invalid record ID");
+    // Only an exact random result ID can be looked up; no anonymous account or list access is needed.
+    const rows = await request("/rest/v1/rpc/get_creation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ p_id: id }),
+    });
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const row = rows[0];
+    if (row.id !== id) throw new Error("Unexpected archive record");
+    return { id, createdAt: row.captured_at, cloud: cloudFromRow(row) };
+  }
+  window.trajectoryArchive = {
+    configured,
+    localSave,
+    localGet,
+    onlineSave,
+    onlineGet,
+  };
+})();

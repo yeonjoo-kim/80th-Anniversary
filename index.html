@@ -1,26 +1,270 @@
 <!doctype html>
 <html lang="ko">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#ffffff">
-<title>미술대학 80주년 · College of Fine Arts 80th Anniversary</title>
-<meta name="description" content="10년의 기록,10년의 비전. A Decade Recorded, A Decade Envisioned.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%230099FF'/%3E%3Cpath d='M24 38V10M10 24l14-14 14 14' fill='none' stroke='white' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="styles.css"><script src="core.js" defer></script><script src="app.js" defer></script>
-</head>
-<body><main>
-<section id="landing" aria-label="미술대학 80주년 / College of Fine Arts 80th Anniversary">
-<button id="enter" type="button" aria-label="궤적만들기로 이동 / Continue to Create trajectories">
-<span class="landing-copy"><span class="landing-ko">미술대학 80주년<br>10년의 기록,10년의 비전</span><span class="landing-en" lang="en">College of Fine Arts 80th Anniversary,<br>A Decade Recorded, A Decade Envisioned</span></span>
-</button></section>
-<section id="maker" hidden aria-labelledby="maker-title">
-<header><h1 id="maker-title" tabindex="-1">궤적만들기<span lang="en">Create trajectories</span></h1><p>참여형 그래픽 실험<span lang="en">Participatory graphic experiment</span></p></header>
-<div class="experiment">
-<div id="output" hidden><svg id="arrows" viewBox="0 0 420 360" role="img" aria-label="생성된 궤적 / Generated trajectories"></svg></div>
-<div class="input-actions"><button id="take-photo" type="button">사진 촬영<span lang="en">Take a photo</span></button><button id="choose-photo" type="button">사진 선택<span lang="en">Choose a photo</span></button></div>
-<input id="camera-file" type="file" accept="image/*" capture="environment" hidden><input id="library-file" type="file" accept="image/*" hidden>
-<p id="status" class="sr-only" role="status" aria-live="polite"></p><p id="error" role="alert" hidden></p>
-<button id="save-png" type="button" hidden>다운로드<span lang="en">Download</span></button>
-</div>
-<footer><p>서울대학교 미술대학 80주년<span lang="en">SNU College of Fine Arts 80th Anniversary</span></p><p>Chris Hamamoto<br>이정아 <span lang="en" class="inline">Jungah Lee</span><br>김연주 <span lang="en" class="inline">Yeonjoo Kim</span></p><div class="credit-links"><span>학교 이메일 <span lang="en" class="inline">/ School email</span></span><a href="https://art.snu.ac.kr/" target="_blank" rel="noopener noreferrer">학교 홈페이지 <span lang="en" class="inline">/ School website</span></a></div></footer>
-</section>
-</main></body></html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#EEEEEF" />
+    <meta
+      name="description"
+      content="10년의 기록, 10년의 비전. 사진 속 색으로 나만의 궤적과 포스터를 만드세요."
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>궤적 그리기 · Create Trajectories</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M8 40V8h32M8 8l32 32M40 24v16H24' fill='none' stroke='%23C800FF' stroke-width='5'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="supabase-config.js" defer></script>
+    <script src="core.js" defer></script>
+    <script src="archive.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main id="experience">
+      <section id="landing" class="screen" aria-labelledby="landing-title">
+        <h1 id="landing-title" class="sr-only">
+          서울대학교 미술대학 80주년. 10년의 기록, 10년의 비전.
+        </h1>
+        <button
+          id="enter"
+          class="landing-enter"
+          aria-label="궤적 그리기 시작 / Start Create Trajectories"
+        >
+          <img
+            src="assets/landing.svg"
+            alt="A Decade Recorded, A Decade Envisioned. 겹쳐진 다섯 색의 화살표."
+            fetchpriority="high"
+          />
+        </button>
+      </section>
+      <section id="home" class="screen" hidden aria-labelledby="home-title">
+        <div id="stripe-field" aria-hidden="true"></div>
+        <h1 id="home-title">
+          <img
+            src="assets/home-title.svg"
+            alt="궤적 그리기 / Create Trajectories"
+          />
+        </h1>
+        <button class="info-button" data-action="info">INFO</button>
+        <button id="take-photo" class="vertical-action camera-action">
+          <span>촬영하기 <i lang="en">Take a Photo</i></span>
+        </button>
+        <button id="choose-photo" class="vertical-action library-action">
+          <span>가져오기 <i lang="en">Choose a Photo</i></span>
+        </button>
+        <img
+          class="credits"
+          src="assets/credits.svg"
+          alt="서울대학교 미술대학 · 서울대학교 조형연구소 · SNU 10-10 PROJECT · College of Fine Arts 80th Anniversary Symposium"
+        />
+        <p class="sr-only">배경을 좌우로 움직이면 패턴의 색상이 바뀝니다.</p>
+      </section>
+      <section id="photo" class="screen" hidden aria-label="선택한 사진">
+        <img
+          class="photo-decoration"
+          src="assets/photo-decoration.svg"
+          alt=""
+        />
+        <div class="photo-frame">
+          <img id="photo-preview" alt="선택한 사진" /><button
+            id="replace-photo"
+            class="photo-replace"
+          >
+            사진 바꾸기 <span lang="en">Change photo</span>
+          </button>
+        </div>
+        <button
+          class="back-button light"
+          data-action="home"
+          aria-label="홈으로 돌아가기"
+        >
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M5 5v18h18l19 19M30 42h12V30" />
+          </svg>
+        </button>
+        <div class="create-area">
+          <button id="create" class="color-button">
+            <span>그리기</span><i lang="en">Create</i>
+          </button>
+          <p id="save-notice" class="save-notice"></p>
+        </div>
+        <img
+          class="credits"
+          src="assets/credits.svg"
+          alt="서울대학교 미술대학 80주년 심포지엄"
+        />
+      </section>
+      <section
+        id="processing"
+        class="screen"
+        hidden
+        aria-labelledby="processing-label"
+        aria-busy="true"
+      >
+        <div id="process-frames" aria-hidden="true"></div>
+        <p id="processing-label" class="sr-only">
+          사진의 색과 선에서 궤적을 그리고 있습니다.
+        </p>
+      </section>
+      <section id="finish" class="screen" hidden aria-label="완성된 궤적">
+        <button class="info-button" data-action="info">INFO</button>
+        <div class="finished-art">
+          <img id="result-preview" alt="사진에서 생성한 궤적과 날짜" />
+        </div>
+        <div class="preview-switch" role="group" aria-label="이미지 미리보기">
+          <button id="view-arrows" aria-pressed="true">궤적 + 날짜</button
+          ><span aria-hidden="true">/</span
+          ><button id="view-poster" aria-pressed="false">포스터</button>
+        </div>
+        <div class="finish-actions">
+          <button id="download" class="color-button">
+            <span>다운로드</span><i lang="en">Download</i></button
+          ><button id="restart" class="color-button">
+            <span>다시하기</span><i lang="en">Restart</i>
+          </button>
+        </div>
+        <div class="finish-meta">
+          <p id="archive-status" role="status"></p>
+          <button id="open-record" class="text-button">
+            내 궤적 보기 <i lang="en">View my trajectory ↗</i>
+          </button>
+        </div>
+      </section>
+      <section id="info" class="screen" hidden aria-labelledby="info-title">
+        <div id="info-art" aria-hidden="true"></div>
+        <button
+          id="close-info"
+          class="back-button light"
+          aria-label="이전 화면으로 돌아가기"
+        >
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M5 5v18h18l19 19M30 42h12V30" />
+          </svg>
+        </button>
+        <h1 id="info-title" class="sr-only">궤적 그리기 소개</h1>
+        <div class="info-copy">
+          <div lang="ko">
+            <p>
+              ‘궤적 그리기’는 서울대학교 80주년 개교를 기념하여 미술대학에서
+              주최한 심포지엄 &lt;10년의 기록, 10년의 비전&gt;의 참여 디자인
+              프로그램이다.
+            </p>
+            <p>
+              8개의 학과와 연합 전공은 8개의 화살표가 되어, 새로운 궤적을
+              만들어낸다. 참가자가 입력한 이미지의 값에 따라, 각기 다른 화살표
+              조합이 생겨난다.
+            </p>
+            <p>
+              이 웹사이트는 크리스 하마모토와 그의 연구원 김연주, 이정아가 함께
+              만들었다.
+            </p>
+          </div>
+          <div lang="en">
+            <p>
+              ‘Create Trajectories’ is a participatory design program for &lt;A
+              Decade of Records, A Decade of Vision&gt;, a symposium organized
+              by the College of Fine Arts to commemorate the 80th anniversary of
+              Seoul National University.
+            </p>
+            <p>
+              The eight departments and interdisciplinary programs take the form
+              of eight arrows, coming together to create new trajectories.
+              Different combinations of arrows are generated based on values
+              derived from images uploaded by participants.
+            </p>
+            <p>
+              This website was created by Chris Hamamoto together with members
+              of his research team, Yeonjoo Kim and Jungah Lee.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section
+        id="record"
+        class="record-screen"
+        hidden
+        aria-labelledby="record-title"
+      >
+        <header class="record-header">
+          <button class="back-button" data-action="home" aria-label="홈으로">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path d="M5 5v18h18l19 19M30 42h12V30" />
+            </svg>
+          </button>
+          <h1 id="record-title">나의 궤적<i lang="en">My trajectory</i></h1>
+          <button id="share-record" class="text-button" hidden>
+            링크 복사 ↗
+          </button>
+        </header>
+        <p id="record-description" class="record-description" role="status"></p>
+        <div id="record-images" hidden>
+          <figure>
+            <img id="record-photo" alt="궤적의 바탕이 된 사진" />
+            <figcaption>사진 <i lang="en">Photograph</i></figcaption>
+          </figure>
+          <figure>
+            <img id="record-arrows" alt="사진에서 만들어진 궤적과 생성 날짜" />
+            <figcaption>
+              궤적과 날짜 <i lang="en">Trajectory & date</i>
+            </figcaption>
+          </figure>
+          <div class="record-downloads">
+            <button id="record-download-arrows" class="color-button">
+              <span>궤적 저장</span><i lang="en">Save trajectory</i></button
+            ><button id="record-download-poster" class="color-button">
+              <span>포스터 저장</span><i lang="en">Save poster</i>
+            </button>
+          </div>
+        </div>
+        <button id="retry-cloud" class="text-button" hidden>
+          온라인 저장 다시 시도 ↗
+        </button>
+      </section>
+    </main>
+    <input
+      id="camera-file"
+      type="file"
+      accept="image/*"
+      capture="environment"
+      hidden
+    />
+    <input id="library-file" type="file" accept="image/*" hidden />
+    <div class="settings">
+      <button
+        id="feedback-toggle"
+        aria-pressed="true"
+        aria-label="소리와 진동 끄기"
+      >
+        소리·진동 켜짐
+      </button>
+    </div>
+    <p id="status" class="sr-only" role="status" aria-live="polite"></p>
+    <div id="error" class="error-toast" role="alert" hidden>
+      <span id="error-message"></span
+      ><button id="dismiss-error" aria-label="오류 메시지 닫기">×</button>
+    </div>
+    <dialog id="download-dialog" aria-labelledby="download-title">
+      <form method="dialog">
+        <button class="dialog-close" aria-label="닫기">×</button>
+        <h2 id="download-title">나의 궤적 간직하기</h2>
+        <p>
+          저장 후 결과 페이지에서 다른 이미지도 저장할 수 있어요.<br />휴대폰에서
+          공유 메뉴가 열리면 ‘이미지 저장’을 선택하세요.
+        </p>
+        <button type="button" id="save-arrows" class="color-button">
+          <span>궤적 + 날짜 저장</span><i lang="en">Save trajectory</i></button
+        ><button type="button" id="save-poster" class="color-button">
+          <span>완성된 포스터 저장</span><i lang="en">Save poster</i></button
+        ><button type="button" id="download-done" class="text-button">
+          사진과 나의 궤적 보기 ↗
+        </button>
+        <p id="download-status" role="status"></p>
+      </form>
+    </dialog>
+  </body>
+</html>
