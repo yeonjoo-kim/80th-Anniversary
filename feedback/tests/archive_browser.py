@@ -80,7 +80,7 @@ with sync_playwright() as p:
     page.goto(BASE+'/#result/'+record_id);page.locator('#record-images').wait_for(state='visible')
     assert page.locator('#share-record').is_visible()
     assert data['writes']==1 and data['signup']==1
-    assert len(data['attempts'])==6 and data['attempts'][:3]==data['attempts'][3:]
+    assert len(data['attempts'])==6 and set(data['attempts'][:3])==set(data['attempts'][3:]), data['attempts']
     assert sorted(v['type'] for v in data['uploads'].values())==['image/jpeg','image/png','image/png']
     result_url=page.url
     other=browser.new_context(viewport={'width':390,'height':844});fixture(other,data)

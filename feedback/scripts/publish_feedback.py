@@ -20,7 +20,9 @@ def run(*args, data=None, env=None):
                           stdout=subprocess.PIPE, env=env).stdout.strip()
 
 def workflow(commit):
-    files = ['index.html', 'app.js', 'archive.js', 'styles.css', 'assets/audio/tap-1.wav']
+    files = ['index.html', 'app.js', 'archive.js', 'styles.css',
+             'assets/audio/feedback-sprite.wav', 'assets/back-arrows.json', 'assets/favicon.svg',
+             'assets/process-1.svg', 'assets/photo-decoration.svg', 'assets/apple-touch-icon.png']
     expected = {}
     for name in files:
         body = subprocess.check_output(['git', 'show', f'{commit}:{name}'], cwd=ROOT)

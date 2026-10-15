@@ -13,7 +13,7 @@ jobs:
         run: |
           python3 - <<'CHECK'
           import hashlib, time, urllib.request
-          expected = {'index.html': 'a7339f3a2448c76359e8e3122c5df4b558ac148b320b0317a048ad80143d78ad', 'app.js': '28fb0940a8ca322b419b371656009331209891dcfd87f49e4d99b9a90b7cb975', 'archive.js': 'f466d2255b04fd13cee6afaaaf57f4e851dbfb0e0b8f209b55986dfe7e79fff6', 'styles.css': '41e949ee528b892e1127a9aba2ad873f6d26e207e80e0fe219cf18a8ef8a6365', 'assets/audio/tap-1.wav': 'bb1d671dbc6b454d71ead9999b192837551f64d06e00d536c9a86211dc5eb77d', '': 'a7339f3a2448c76359e8e3122c5df4b558ac148b320b0317a048ad80143d78ad'}
+          expected = {'index.html': '80b4bf6adc93f39d81cdcc3991489adc09e85ef11ad5042b531b057ce7ab37f9', 'app.js': '9e45cf9d003443c55a9f8fcca6feb27eb211c0fd629b9771d339c355dac85904', 'archive.js': 'f466d2255b04fd13cee6afaaaf57f4e851dbfb0e0b8f209b55986dfe7e79fff6', 'styles.css': 'a6b7e78f2efde6b1c69f56b63dd0c56be448213beff0af0ce6b20e5cd677f0fb', 'assets/audio/feedback-sprite.wav': '7c4f293753655fc797ae9202982d05233d870b2e5ddcc2a31fb36bb9c68dab4a', 'assets/back-arrows.json': '6d0ed032a3b1a61592db6c9f620a127a9257137b26a489f69e41f53951b211cc', 'assets/favicon.svg': '0f8535f412890987a770bfa88d5b955f9d16bb854586249c511057fcdbf4ee56', 'assets/process-1.svg': 'a2995aaa147515e9069c6bf1c5f40202d9ae7ff5c6d47f76841637d8551e0d1c', 'assets/photo-decoration.svg': 'c58d02e1de806e1e674f6dbf46725d85c599e8ab87d407eac41272c4b50c4bcd', 'assets/apple-touch-icon.png': 'ab04774ee8384c05a17617426bd41938408e2fb1cdd69bd55a894aa0d580d4a3', '': '80b4bf6adc93f39d81cdcc3991489adc09e85ef11ad5042b531b057ce7ab37f9'}
           for attempt in range(24):
               try:
                   for path, digest in expected.items():

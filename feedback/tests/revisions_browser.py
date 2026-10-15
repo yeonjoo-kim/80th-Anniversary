@@ -59,8 +59,9 @@ with sync_playwright() as p:
     page.set_viewport_size({'width':390,'height':844})
     initial=page.locator('#stripe-field').inner_html()
     page.wait_for_function('(initial)=>document.querySelector("#stripe-field").innerHTML!==initial',arg=initial,timeout=3000)
-    assert page.locator('.logo-bar a').count()==4
-    assert [page.locator('.logo-bar a').nth(i).get_attribute('href') for i in range(4)]==['https://art.snu.ac.kr/','https://visualarts.snu.ac.kr/','http://www.bcsai1010.org/','https://www.snu.ac.kr/80th-anniversary/']
+    assert page.locator('.logo-bar a').count()==3
+    assert page.locator('.logo-bar > span img[alt="SNU 10-10 Project"]').count()==1
+    assert [page.locator('.logo-bar a').nth(i).get_attribute('href') for i in range(3)]==['https://art.snu.ac.kr/','https://visualarts.snu.ac.kr/','https://www.snu.ac.kr/80th-anniversary/']
     assert page.locator('#choose-photo i').evaluate('(e)=>getComputedStyle(e).fontWeight')=='500'
     assert 'Playfair Display' in page.locator('#choose-photo i').evaluate('(e)=>getComputedStyle(e).fontFamily')
     assert page.evaluate('document.fonts.check(\'italic 500 16px "Playfair Display"\')')
@@ -91,7 +92,9 @@ with sync_playwright() as p:
         for w,h in VIEWPORTS:
             page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#photo','#photo-preview','.create-area','#create'])
             geometry=page.evaluate('''()=>{const i=document.querySelector('#photo-preview'),r=i.getBoundingClientRect(),b=document.querySelector('#create').getBoundingClientRect();return{ratio:i.naturalWidth/i.naturalHeight,fit:getComputedStyle(i).objectFit,bottom:r.bottom,button:b.y,gap:parseFloat(getComputedStyle(document.querySelector('.create-area')).marginTop)};}''')
-            assert geometry['fit']=='contain' and abs(geometry['button']-geometry['bottom']-geometry['gap'])<1.5,geometry
+            assert geometry['fit']=='contain',geometry
+            if w<1024:assert abs(geometry['button']-geometry['bottom']-geometry['gap'])<1.5,geometry
+            else:assert page.locator('#create').bounding_box()['x']>w*.6
     page.set_viewport_size({'width':390,'height':844});upload(page)
     page.locator('#create').tap();page.locator('#processing').wait_for(state='visible')
     sound_count=page.evaluate('soundCalls.length')
@@ -217,6 +220,14 @@ with sync_playwright() as p:
     assert not media['muted'] and media['volume']>0 and media['error'] is None and media['elapsed']>0,media
     phone.locator('#close-info').tap();phone.locator('#home').wait_for(state='visible')
     assert phone.locator('audio[data-feedback]').count()==1
+    media_source=phone.locator('audio[data-feedback]').get_attribute('src')
+    phone.evaluate('''()=>{window.feedbackPlaybackCount=0;document.querySelector('audio[data-feedback]').addEventListener('playing',()=>feedbackPlaybackCount++);}''')
+    phone.wait_for_timeout(120)
+    phone.locator('#home .info-button').tap()
+    phone.wait_for_function('feedbackPlaybackCount>0')
+    assert phone.locator('audio[data-feedback]').get_attribute('src')==media_source
+    assert phone.locator('audio[data-feedback]').evaluate('e=>e.currentTime>.25&&!e.error')
+    phone.locator('#close-info').tap();phone.locator('#home').wait_for(state='visible')
     upload(phone)
     back=phone.locator('#photo .back-button');phone.wait_for_function('document.querySelector("#photo .back-button").dataset.arrow!==undefined')
     shapes=[]
