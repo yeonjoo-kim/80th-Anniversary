@@ -11,6 +11,7 @@
     "finish",
     "info",
     "record",
+    "gallery",
   ];
   const state = {
     screen: "landing",
@@ -25,16 +26,17 @@
     recordUrls: [],
     previewUrls: [],
     viewedRecord: null,
+    galleryPage: 0,
+    galleryUrls: [],
   };
   let stripeOrder = [],
     processTimer,
     audioContext,
     lastFeedback = 0,
+    homeTimer,
+    previewTimer,
+    gallerySerial = 0,
     recordSerial = 0;
-  let feedbackEnabled = true;
-  try {
-    feedbackEnabled = localStorage.getItem("trajectory-feedback") !== "off";
-  } catch {}
 
   function status(message) {
     $("status").textContent = message;
@@ -110,67 +112,79 @@
     drawStripes();
     randomizeButtons();
   }
-  function feedback(index = 0) {
-    if (!feedbackEnabled || performance.now() - lastFeedback < 65) return;
+  let audioBuffer, audioDecoding, nextSound = 0;
+  const soundCues = [[.970,.075],[1.070,.075],[1.169,.075],[1.270,.085],[1.405,.085],[1.544,.085],[1.758,.085],[2.295,.085]];
+  const audioBytes = fetch("assets/audio/revolver-spin.mp3").then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
+  function feedback() {
+    if (performance.now() - lastFeedback < 70) return;
     lastFeedback = performance.now();
-    try {
-      navigator.vibrate?.(9);
-    } catch {}
+    try { navigator.vibrate?.(18); } catch {}
     try {
       const AudioCtor = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtor) return;
       audioContext ||= new AudioCtor();
-      if (audioContext.state === "suspended")
-        audioContext.resume().catch(() => {});
-      const oscillator = audioContext.createOscillator(),
-        gain = audioContext.createGain(),
-        time = audioContext.currentTime;
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(300 + index * 55, time);
-      oscillator.frequency.exponentialRampToValueAtTime(
-        180 + index * 35,
-        time + 0.055,
-      );
-      gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.exponentialRampToValueAtTime(0.045, time + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.07);
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.start(time);
-      oscillator.stop(time + 0.08);
+      if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+      audioDecoding ||= audioBytes.then(bytes => bytes ? audioContext.decodeAudioData(bytes.slice(0)) : null).then(buffer => { audioBuffer = buffer; return buffer; }).catch(() => null);
+      const play = buffer => {
+        if (!buffer) return;
+        const [offset,duration] = soundCues[nextSound++ % soundCues.length];
+        const source = audioContext.createBufferSource(), gain = audioContext.createGain(), now = audioContext.currentTime;
+        source.buffer = buffer;
+        gain.gain.setValueAtTime(0,now); gain.gain.linearRampToValueAtTime(.8,now+.002);
+        gain.gain.setValueAtTime(.8,now+duration-.01); gain.gain.linearRampToValueAtTime(0,now+duration);
+        source.connect(gain); gain.connect(audioContext.destination); source.start(now,offset,duration);
+      };
+      if (audioBuffer) play(audioBuffer); else void audioDecoding.then(play);
     } catch {}
   }
-  function updateFeedback() {
-    const b = $("feedback-toggle");
-    b.setAttribute("aria-pressed", String(feedbackEnabled));
-    b.setAttribute(
-      "aria-label",
-      feedbackEnabled ? "소리와 진동 끄기" : "소리와 진동 켜기",
-    );
-    b.textContent = feedbackEnabled ? "소리·진동 켜짐" : "소리·진동 꺼짐";
+  function differentColor(previous) {
+    const choices = palette.filter(color => color.hex !== previous);
+    return choices[Math.floor(Math.random() * choices.length)];
   }
-  document.addEventListener(
-    "click",
-    (event) => {
-      if (
-        event.target.closest("button") &&
-        event.target.closest("button") !== $("feedback-toggle")
-      )
-        feedback();
-    },
-    true,
-  );
-  $("feedback-toggle").addEventListener("click", () => {
-    feedbackEnabled = !feedbackEnabled;
-    try {
-      localStorage.setItem(
-        "trajectory-feedback",
-        feedbackEnabled ? "on" : "off",
-      );
-    } catch {}
-    updateFeedback();
-    if (feedbackEnabled) feedback();
+  function paintInteraction(button) {
+    const color = differentColor(button.dataset.lastColor);
+    button.dataset.lastColor = color.hex;
+    if (button.id === "enter") { randomizeLanding(); return; }
+    if (button.classList.contains("back-button")) {
+      button.style.color = `rgb(${color.hex.slice(1).match(/../g).map(v=>parseInt(v,16)).join(" ")} / ${color.opacity})`;
+      return;
+    }
+    if (button.classList.contains("vertical-action")) {
+      stripeOrder[button.id === "take-photo" ? 3 : 4] = color; drawStripes(); return;
+    }
+    colorButton(button,color);
+    if (!button.classList.contains("archive-card")) {
+      button.style.backgroundColor = "var(--button-color)";
+      button.style.color = "var(--button-ink)";
+    }
+  }
+  let heldButton = null;
+  document.addEventListener("pointerover",event=>{
+    const button=event.target.closest("button");
+    if (event.pointerType === "mouse" && button && !button.disabled && !button.contains(event.relatedTarget)) paintInteraction(button);
   });
+  document.addEventListener("pointerdown",event=>{
+    const button=event.target.closest("button");
+    if (!button || button.disabled || event.button !== 0) return;
+    heldButton={button,id:event.pointerId,x:event.clientX,y:event.clientY,last:performance.now(),moved:false};
+    delete button.dataset.dragged; paintInteraction(button); feedback();
+  },true);
+  document.addEventListener("pointermove",event=>{
+    if (!heldButton || event.pointerId !== heldButton.id) return;
+    if (Math.hypot(event.clientX-heldButton.x,event.clientY-heldButton.y)>8) heldButton.moved=true;
+    if (heldButton.moved && performance.now()-heldButton.last>85) {
+      heldButton.last=performance.now();paintInteraction(heldButton.button);feedback();
+    }
+  },true);
+  for (const type of ["pointerup","pointercancel"]) document.addEventListener(type,()=>{
+    if (heldButton?.moved) heldButton.button.dataset.dragged="true";
+    heldButton=null;
+  },true);
+  document.addEventListener("click",event=>{
+    const button=event.target.closest("button");
+    if (button?.dataset.dragged === "true") {delete button.dataset.dragged;event.preventDefault();event.stopImmediatePropagation();return;}
+    if (button && event.detail === 0) {paintInteraction(button);feedback();}
+  },true);
 
   let pointer = null;
   $("stripe-field").addEventListener("pointerdown", (event) => {
@@ -195,25 +209,34 @@
       pointer = null;
     });
 
-  function displayScreen(name) {
-    for (const id of screens) $(id).hidden = id !== name;
-    state.screen = name;
-    $(name).setAttribute("tabindex", "-1");
-    $(name).focus({ preventScroll: true });
-    document.querySelector(".settings").hidden = name === "processing";
-    document
-      .querySelector(".settings")
-      .classList.toggle("over-photo", name === "photo");
-    window.scrollTo(0, 0);
+  function updateTimers() {
+    clearInterval(homeTimer);clearInterval(previewTimer);
+    if (document.hidden) return;
+    if (state.screen === "home") homeTimer=setInterval(()=>{stripeOrder=shuffle(palette);drawStripes();},2000);
+    if (state.screen === "finish" && state.record && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      previewTimer=setInterval(()=>setPreview(state.preview === "arrows" ? "poster" : "arrows"),800);
+    }
   }
+  function fitInfo() {
+    if (state.screen !== "info") return;
+    const copy=document.querySelector(".info-copy");copy.style.fontSize="";
+    let size=parseFloat(getComputedStyle(copy).fontSize);
+    for (let i=0;i<6 && copy.scrollHeight>copy.clientHeight+1;i++) {
+      size*=Math.min(.97,copy.clientHeight/copy.scrollHeight);copy.style.fontSize=size+"px";
+    }
+  }
+  function displayScreen(name) {
+    for (const id of screens) $(id).hidden=id!==name;
+    state.screen=name;$(name).setAttribute("tabindex","-1");$(name).focus({preventScroll:true});
+    if (name === "landing") randomizeLanding();
+    if (name === "info") requestAnimationFrame(fitInfo);
+    updateTimers();
+  }
+  addEventListener("resize",fitInfo);document.fonts.ready.then(fitInfo);
+  document.addEventListener("visibilitychange",updateTimers);
   function navigate(hash) {
     if (location.hash === hash) route();
     else location.hash = hash;
-  }
-  function updateNotice() {
-    $("save-notice").textContent = archive.configured()
-      ? "그리기를 누르면 사진과 생성 이미지가 작품 기록에 저장됩니다. 결과 링크를 아는 사람은 사진과 궤적을 볼 수 있어요."
-      : "사진과 결과는 이 브라우저에 저장됩니다. 온라인 기록은 아직 연결되지 않았어요.";
   }
   function archiveMessage(record = state.record) {
     if (record?.cloud)
@@ -252,6 +275,7 @@
       clearInterval(processTimer);
     }
     const hash = location.hash;
+    if (hash === "#archive") {displayScreen("gallery");await loadGallery();return;}
     if (hash.startsWith("#result/")) {
       displayScreen("record");
       await loadRecord(hash.slice(8));
@@ -263,7 +287,6 @@
     }
     if (hash === "#photo" && state.photo) {
       displayScreen("photo");
-      updateNotice();
       return;
     }
     if (hash === "#finish" && state.record) {
@@ -287,6 +310,17 @@
     .forEach((button) =>
       button.addEventListener("click", () => navigate("#home")),
     );
+  let landingSVGReady=false;
+  function randomizeLanding() {
+    if (!landingSVGReady) return;
+    const colors=shuffle(palette);
+    document.querySelectorAll("#landing-art .landing-arrow").forEach((path,i)=>{
+      path.setAttribute("fill",colors[i].hex);path.setAttribute("fill-opacity",colors[i].opacity);
+    });
+  }
+  const landingReady=fetch("assets/landing.svg").then(r=>{if(!r.ok)throw Error();return r.text();}).then(text=>{
+    $("landing-art").innerHTML=text;landingSVGReady=true;randomizeLanding();
+  }).catch(()=>{});
   let infoSVG = "";
   const infoReady = fetch("assets/info-arrow.svg")
     .then((r) => {
@@ -319,8 +353,18 @@
   );
   $("close-info").addEventListener("click", () => navigate(state.infoReturn));
   $("take-photo").addEventListener("click", () => $("camera-file").click());
-  $("choose-photo").addEventListener("click", () => $("library-file").click());
-  $("replace-photo").addEventListener("click", () => $("library-file").click());
+  // No browser API can force the iOS native picker to bypass its source menu.
+  // Prefer a supported image picker; retain a type=file fallback for mobile Safari.
+  $("choose-photo").addEventListener("click",async()=>{
+    if (typeof window.showOpenFilePicker === "function") {
+      try {
+        const [handle]=await window.showOpenFilePicker({multiple:false,types:[{description:"사진",accept:{"image/*":[".jpg",".jpeg",".png",".webp",".avif",".heic"]}}]});
+        await selectPhoto(await handle.getFile());return;
+      } catch(error) {if(error.name === "AbortError") return;}
+    }
+    $("library-file").click();
+  });
+
 
   function loadImage(source) {
     return new Promise((resolve, reject) => {
@@ -394,7 +438,6 @@
       state.photoUrl = URL.createObjectURL(photo);
       $("photo-preview").src = state.photoUrl;
       randomizeButtons();
-      updateNotice();
       navigate("#photo");
       status("사진을 불러왔습니다. 그리기를 눌러 궤적을 만드세요.");
     } catch {
@@ -533,13 +576,15 @@
     const thumbnail = withType
       ? `<image x="61" y="544" width="37" height="56" preserveAspectRatio="xMidYMid slice" href="${await dataURL(photo)}"/>`
       : "";
-    const date = `<text x="256" y="594" transform="rotate(-30 256 594)" fill="#4400FF" font-family="Georgia,serif" font-size="25">${dateStamp(createdAt)}</text>`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1206" height="1560" viewBox="0 140 402 520"><rect x="0" y="140" width="402" height="520" fill="#EEEEEF"/>${arrowMarkup(result)}${type}${thumbnail}${date}</svg>`;
+    await document.fonts.load('25px "Panchi Mono"');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1206" height="1560" viewBox="0 140 402 520"><rect x="0" y="140" width="402" height="520" fill="#EEEEEF"/>${arrowMarkup(result)}${type}${thumbnail}</svg>`;
     const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     try {
       const image = await loadImage(url),
         c = canvas(1206, 1560);
-      c.getContext("2d").drawImage(image, 0, 0, 1206, 1560);
+      const ctx=c.getContext("2d");ctx.drawImage(image,0,0,1206,1560);
+      ctx.save();ctx.scale(3,3);ctx.translate(247,594-140);ctx.rotate(-Math.PI/6);
+      ctx.font='25px "Panchi Mono"';ctx.fillStyle="#4400FF";ctx.fillText(dateStamp(createdAt),0,0);ctx.restore();
       return await toBlob(c);
     } finally {
       URL.revokeObjectURL(url);
@@ -552,8 +597,7 @@
       kind === "poster"
         ? "궤적, 날짜, 사진과 글자를 합친 완성 포스터"
         : "사진에서 생성한 궤적과 생성 날짜";
-    $("view-arrows").setAttribute("aria-pressed", String(kind === "arrows"));
-    $("view-poster").setAttribute("aria-pressed", String(kind === "poster"));
+
   }
   async function persist(record) {
     state.saveState = {
@@ -667,8 +711,7 @@
       }
     }
   });
-  $("view-arrows").addEventListener("click", () => setPreview("arrows"));
-  $("view-poster").addEventListener("click", () => setPreview("poster"));
+
   $("restart").addEventListener("click", () => {
     randomizeHome();
     navigate("#home");
@@ -734,10 +777,55 @@
   );
   function openCurrentRecord() {
     $("download-dialog").close();
-    if (state.record) navigate("#result/" + state.record.id);
+    navigate("#archive");
   }
   $("download-done").addEventListener("click", openCurrentRecord);
   $("open-record").addEventListener("click", openCurrentRecord);
+  async function loadGallery() {
+    const serial=++gallerySerial;
+    $("gallery-status").textContent="궤적을 불러오고 있어요…";
+    $("gallery-grid").replaceChildren();$("gallery-prev").disabled=true;$("gallery-next").disabled=true;
+    state.galleryUrls.forEach(url=>URL.revokeObjectURL(url));state.galleryUrls=[];
+    try {
+      let rows, hasMore=false;
+      if (archive.configured()) {
+        const result=await archive.onlineList(state.galleryPage*6,6);rows=result.items;hasMore=result.hasMore;
+      } else {
+        const local=await archive.localList();
+        const subset=local.slice(state.galleryPage*6,state.galleryPage*6+7);hasMore=subset.length>6;
+        rows=subset.slice(0,6).map(record=>{
+          const photoUrl=URL.createObjectURL(record.photo),arrowsUrl=URL.createObjectURL(record.arrows);
+          state.galleryUrls.push(photoUrl,arrowsUrl);return{id:record.id,createdAt:record.createdAt,photoUrl,arrowsUrl};
+        });
+      }
+      if (serial!==gallerySerial || state.screen!=="gallery") return;
+      $("gallery-status").textContent=rows.length?"":"아직 공개된 궤적이 없습니다.";
+      for (const row of rows) {
+        const card=document.createElement("button");card.className="archive-card";card.setAttribute("aria-pressed","false");
+        card.setAttribute("aria-label",dateStamp(row.createdAt)+" 궤적. 누르면 사진을 볼 수 있습니다.");
+        for (const [kind,src] of [["arrows",row.arrowsUrl],["photo",row.photoUrl]]) {
+          const image=new Image();image.src=src;image.alt=kind==="arrows"?"참여자가 만든 궤적과 날짜":"궤적의 바탕이 된 사진";
+          image.className="archive-"+kind;image.draggable=false;image.loading="eager";card.append(image);
+        }
+        let pressedAt=0;
+        card.addEventListener("pointerdown",()=>{pressedAt=performance.now();card.classList.add("is-pressed");});
+        for (const type of ["pointerup","pointercancel","pointerleave"]) card.addEventListener(type,()=>card.classList.remove("is-pressed"));
+        card.addEventListener("click",event=>{
+          if (event.detail>0 && performance.now()-pressedAt>350) return;
+          card.setAttribute("aria-pressed",String(card.getAttribute("aria-pressed")!=="true"));
+        });
+        card.addEventListener("contextmenu",event=>event.preventDefault());
+        $("gallery-grid").append(card);
+      }
+      $("gallery-page").textContent=String(state.galleryPage+1);
+      $("gallery-prev").disabled=state.galleryPage===0;$("gallery-next").disabled=!hasMore;
+    } catch {
+      if(serial!==gallerySerial)return;
+      $("gallery-status").textContent="아카이브를 불러오지 못했어요. 잠시 후 다시 열어 주세요.";
+    }
+  }
+  $("gallery-prev").addEventListener("click",()=>{if(state.galleryPage>0){state.galleryPage--;void loadGallery();}});
+  $("gallery-next").addEventListener("click",()=>{state.galleryPage++;void loadGallery();});
   function recordDescription(record) {
     if (record.cloud)
       return `${dateStamp(record.createdAt)}\n사진에서 출발한 나의 궤적. 이 링크로 언제든 다시 볼 수 있어요.`;
@@ -832,8 +920,6 @@
   $("dismiss-error").addEventListener("click", clearError);
   addEventListener("hashchange", route);
   randomizeHome();
-  updateNotice();
-  updateFeedback();
-  void infoReady;
+  void infoReady;void landingReady;
   void route();
 })();
