@@ -23,6 +23,8 @@ python3 scripts/publish_feedback.py --publish
 
 이 스크립트는 현재 체크아웃을 바꾸지 않고 `codex/public-feedback` 브랜치에 정적 스냅샷을 만듭니다. 기존 GitHub Pages 루트 파일은 `main`에서 그대로 복사하고 `/feedback/` 아래에 수정본을 둡니다. Pages의 배포 원본만 이 브랜치로 설정하며 `main`과 Vercel 운영 사이트에 쓰지 않습니다. 후속 피드백 배포 때도 최신 main 루트 파일을 보존합니다. `--publish` 없이 실행하면 계획만 출력합니다.
 
+연결 계정에 Pages 설정 권한이 없어 HTTP 403이 반환되면 스냅샷 업로드까지 완료하고 종료 코드 2와 설정 안내를 출력합니다. 이 경우 저장소 **Settings → Pages → Build and deployment**에서 **Deploy from a branch → codex/public-feedback → /(root) → Save**를 한 번 선택합니다. 배포 원본이 선택되기 전에는 위 주소가 활성화되지 않습니다.
+
 생성된 GitHub Actions 작업은 인증·쿠키 없는 실제 HTTPS 요청으로 공개 주소의 HTML·JS·CSS·오디오를 읽고 커밋된 파일 해시 및 오디오 MIME을 확인합니다. Pages 빌드와 이 확인의 성공 여부를 확인한 후 링크를 공유합니다. Supabase의 익명 로그인은 작품을 저장할 때만 쓰며, 방문자가 사이트나 아카이브를 여는 데 로그인 화면은 없습니다.
 
 ## 화면과 기능
