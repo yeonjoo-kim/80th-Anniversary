@@ -27,6 +27,7 @@
     previewUrls: [],
     viewedRecord: null,
     recordNeighbors: { previous: null, next: null },
+    deleting: false,
     archiveBackground: null,
     galleryOffset: 0,
     galleryHasMore: true,
@@ -365,6 +366,10 @@
         .join(" ")} / ${color.opacity})`;
       return;
     }
+    if (button.classList.contains("delete-button")) {
+      button.style.color = cssColor(color);
+      return;
+    }
     if (button.classList.contains("vertical-action")) {
       stripeOrder[Number(button.dataset.stripe)] = color;
       drawStripes();
@@ -472,7 +477,38 @@
       pointer = null;
     });
 
+  function fitRecordLayout() {
+    if (state.screen !== "record") return;
+    const media = $("record-media");
+    const gap = parseFloat(getComputedStyle($("record-images")).columnGap) || 8;
+    const control =
+      parseFloat(getComputedStyle($("delete-record")).width) || 44;
+    const desktop = matchMedia("(min-width: 1024px)").matches;
+    const reserve = desktop ? 0 : control + gap;
+    const side = desktop ? control + gap : 0;
+    const panel = Math.max(
+      0,
+      Math.min(
+        (media.clientWidth - gap - side * 2) / 2,
+        (media.clientHeight - reserve) * 0.8,
+      ),
+    );
+    const height = panel * 1.25,
+      width = panel * 2 + gap;
+    const left = (media.clientWidth - width) / 2;
+    const top = Math.max(0, (media.clientHeight - height - reserve) / 2);
+    for (const [name, value] of Object.entries({
+      "pair-left": left,
+      "pair-top": top,
+      "pair-width": width,
+      "panel-height": height,
+      "delete-left": desktop ? left + width + gap : left + width - control,
+      "delete-top": desktop ? top : top + height + gap,
+    }))
+      media.style.setProperty("--" + name, value + "px");
+  }
   function fitRecordPhoto() {
+    fitRecordLayout();
     const image = $("record-photo");
     if (
       state.screen !== "record" ||
@@ -494,7 +530,7 @@
   }
   $("record-photo").addEventListener("load", fitRecordPhoto);
   if (window.ResizeObserver)
-    new ResizeObserver(fitRecordPhoto).observe($("record-images"));
+    new ResizeObserver(fitRecordPhoto).observe($("record-media"));
   addEventListener("resize", fitRecordPhoto);
   function updateTimers() {
     clearInterval(homeTimer);
@@ -560,6 +596,7 @@
     }
     updatePageSurface();
     if (name === "info") requestAnimationFrame(fitInfo);
+    if (name === "record") requestAnimationFrame(fitRecordPhoto);
     if (name === "record")
       document
         .querySelectorAll("#record .arrow-button")
@@ -595,6 +632,7 @@
   }
   function updateArchiveUI() {
     $("archive-status").textContent = archiveMessage();
+    updateDeleteButton();
     if (
       state.screen === "record" &&
       state.viewedRecord?.id === state.record?.id
@@ -606,6 +644,7 @@
     }
   }
   async function route() {
+    if (!state.deleting && $("delete-dialog").open) $("delete-dialog").close();
     recordSerial++;
     gallerySerial++;
     state.galleryLoading = false;
@@ -862,7 +901,7 @@
       if (state.photoUrl) URL.revokeObjectURL(state.photoUrl);
       state.photo = photo;
       state.photoUrl = URL.createObjectURL(photo);
-      $("photo-preview").style.setProperty(
+      $("photo-preview").parentElement.style.setProperty(
         "--photo-ratio",
         String(c.width / c.height),
       );
@@ -1398,6 +1437,7 @@
   async function loadRecord(id) {
     const serial = recordSerial;
     state.viewedRecord = null;
+    $("delete-record").hidden = true;
     state.recordNeighbors = { previous: null, next: null };
     $("record-prev").disabled = true;
     $("record-next").disabled = true;
@@ -1443,8 +1483,14 @@
       if (record[kind]) state.recordUrls.push(src);
       $(element).src = src;
     }
-    $("record-images").hidden = false;
+    $("record-images").hidden = Boolean(record.deletionPending);
     $("record-description").textContent = "";
+    updateDeleteButton();
+    requestAnimationFrame(fitRecordPhoto);
+    if (record.deletionPending)
+      showError(
+        "이전에 시작한 삭제가 완료되지 않았습니다. 삭제 버튼을 눌러 다시 시도해 주세요.",
+      );
     void updateRecordNeighbors(record, serial);
     $("retry-cloud").hidden =
       !archive.configured() ||
@@ -1452,6 +1498,73 @@
       state.saveState.cloud === "pending";
     randomizeButtons();
   }
+  function updateDeleteButton() {
+    const record = state.viewedRecord;
+    const saving =
+      record?.id === state.record?.id && state.saveState.cloud === "pending";
+    $("delete-record").hidden =
+      !archive.canDelete(record) || saving || state.deleting;
+  }
+  let deletionTarget = null;
+  $("delete-record").addEventListener("click", () => {
+    const record = state.viewedRecord;
+    if (!archive.canDelete(record) || state.deleting) return;
+    deletionTarget = record;
+    $("delete-description").textContent = archive.configured()
+      ? "사진·궤적·포스터가 이 브라우저와 온라인 아카이브에서 삭제됩니다. 삭제 후에는 되돌릴 수 없습니다."
+      : "사진·궤적·포스터가 이 브라우저에서 삭제됩니다. 삭제 후에는 되돌릴 수 없습니다.";
+    $("delete-progress").textContent = "";
+    $("delete-dialog").showModal();
+    $("cancel-delete").focus();
+  });
+  $("cancel-delete").addEventListener("click", () => {
+    if (!state.deleting) $("delete-dialog").close();
+  });
+  $("delete-dialog").addEventListener("cancel", (event) => {
+    if (state.deleting) event.preventDefault();
+  });
+  $("confirm-delete").addEventListener("click", async () => {
+    if (!deletionTarget || state.deleting) return;
+    const record = deletionTarget;
+    state.deleting = true;
+    $("confirm-delete").disabled = $("cancel-delete").disabled = true;
+    $("delete-progress").textContent = "삭제하고 있습니다…";
+    try {
+      await archive.removeOwn(record);
+      if (state.record?.id === record.id) {
+        state.record = null;
+        state.photo = null;
+        if (state.photoUrl) URL.revokeObjectURL(state.photoUrl);
+        state.photoUrl = null;
+        $("photo-preview").removeAttribute("src");
+        $("result-preview").removeAttribute("src");
+        state.previewUrls.forEach(URL.revokeObjectURL);
+        state.previewUrls = [];
+      }
+      deletionTarget = null;
+      state.recordUrls.forEach(URL.revokeObjectURL);
+      state.recordUrls = [];
+      state.galleryLoaded = false;
+      state.galleryScrollTop = 0;
+      state.galleryIds.delete(record.id);
+      $("delete-dialog").close();
+      if (state.viewedRecord?.id === record.id) state.viewedRecord = null;
+      if (state.screen === "record") navigate("#archive");
+      else if (state.screen === "gallery") void loadGallery(true);
+      status("게시물을 삭제했습니다.");
+    } catch (error) {
+      $("delete-progress").textContent =
+        error.code === "session_unavailable"
+          ? "사진을 만든 브라우저의 로그인 정보를 확인할 수 없어 삭제할 수 없습니다."
+          : error.status === 404
+            ? "Supabase 삭제 설정이 필요합니다. 설정 후 다시 시도해 주세요."
+            : "삭제를 완료하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.";
+    } finally {
+      state.deleting = false;
+      $("confirm-delete").disabled = $("cancel-delete").disabled = false;
+      updateDeleteButton();
+    }
+  });
   $("retry-cloud").addEventListener("click", async () => {
     const record = state.viewedRecord;
     if (!record?.photo) return;
@@ -1476,4 +1589,25 @@
   void infoReady;
   void landingReady;
   void route();
+  void archive
+    .retryPendingDeletions()
+    .then((results) => {
+      const removed = new Set(
+        results
+          .filter((result) => result.status === "fulfilled")
+          .map((result) => result.value),
+      );
+      if (removed.has(state.record?.id)) state.record = null;
+      if (removed.has(state.viewedRecord?.id)) {
+        state.viewedRecord = null;
+        state.galleryLoaded = false;
+        navigate("#archive");
+      } else if (results.length && state.screen === "gallery")
+        void loadGallery(true);
+      if (results.some((result) => result.status === "rejected"))
+        showError(
+          "이전 게시물 삭제를 완료하지 못했습니다. 연결 상태를 확인한 뒤 사이트를 다시 열어 주세요.",
+        );
+    })
+    .catch(() => {});
 })();

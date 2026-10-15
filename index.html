@@ -1,26 +1,445 @@
 <!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#ffffff">
-<title>미술대학 80주년 · College of Fine Arts 80th Anniversary</title>
-<meta name="description" content="10년의 기록,10년의 비전. A Decade Recorded, A Decade Envisioned.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%230099FF'/%3E%3Cpath d='M24 38V10M10 24l14-14 14 14' fill='none' stroke='white' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="styles.css"><script src="core.js" defer></script><script src="app.js" defer></script>
-</head>
-<body><main>
-<section id="landing" aria-label="미술대학 80주년 / College of Fine Arts 80th Anniversary">
-<button id="enter" type="button" aria-label="궤적만들기로 이동 / Continue to Create trajectories">
-<span class="landing-copy"><span class="landing-ko">미술대학 80주년<br>10년의 기록,10년의 비전</span><span class="landing-en" lang="en">College of Fine Arts 80th Anniversary,<br>A Decade Recorded, A Decade Envisioned</span></span>
-</button></section>
-<section id="maker" hidden aria-labelledby="maker-title">
-<header><h1 id="maker-title" tabindex="-1">궤적만들기<span lang="en">Create trajectories</span></h1><p>참여형 그래픽 실험<span lang="en">Participatory graphic experiment</span></p></header>
-<div class="experiment">
-<div id="output" hidden><svg id="arrows" viewBox="0 0 420 360" role="img" aria-label="생성된 궤적 / Generated trajectories"></svg></div>
-<div class="input-actions"><button id="take-photo" type="button">사진 촬영<span lang="en">Take a photo</span></button><button id="choose-photo" type="button">사진 선택<span lang="en">Choose a photo</span></button></div>
-<input id="camera-file" type="file" accept="image/*" capture="environment" hidden><input id="library-file" type="file" accept="image/*" hidden>
-<p id="status" class="sr-only" role="status" aria-live="polite"></p><p id="error" role="alert" hidden></p>
-<button id="save-png" type="button" hidden>다운로드<span lang="en">Download</span></button>
-</div>
-<footer><p>서울대학교 미술대학 80주년<span lang="en">SNU College of Fine Arts 80th Anniversary</span></p><p>Chris Hamamoto<br>이정아 <span lang="en" class="inline">Jungah Lee</span><br>김연주 <span lang="en" class="inline">Yeonjoo Kim</span></p><div class="credit-links"><span>학교 이메일 <span lang="en" class="inline">/ School email</span></span><a href="https://art.snu.ac.kr/" target="_blank" rel="noopener noreferrer">학교 홈페이지 <span lang="en" class="inline">/ School website</span></a></div></footer>
-</section>
-</main></body></html>
+<html lang="ko" data-revision="9">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#EEEEEF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="궤적 그리기" />
+    <link rel="manifest" href="manifest.webmanifest?v=7" />
+    <meta
+      name="description"
+      content="10년의 기록, 10년의 비전. 사진 속 색으로 나만의 궤적과 포스터를 만드세요."
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>궤적 그리기 · Create Trajectories</title>
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="assets/favicon-32.png"
+    />
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="assets/apple-touch-icon.png"
+    />
+    <link rel="stylesheet" href="styles.css?v=9" />
+    <link
+      rel="preload"
+      as="font"
+      href="assets/fonts/KoPubWorldBatang-Medium.woff2"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      href="assets/fonts/PlayfairDisplay-Italic.ttf"
+      type="font/ttf"
+      crossorigin
+    />
+    <script src="supabase-config.js" defer></script>
+    <script src="core.js" defer></script>
+    <script src="archive.js?v=9" defer></script>
+    <script src="app.js?v=9" defer></script>
+  </head>
+  <body>
+    <div id="page-background" aria-hidden="true"></div>
+    <main id="experience">
+      <section id="landing" class="screen" aria-labelledby="landing-title">
+        <button
+          id="enter"
+          class="landing-enter"
+          aria-label="궤적 그리기 시작 / Start Create Trajectories"
+        >
+          <div id="landing-art" aria-hidden="true"></div>
+          <img
+            class="landing-marks"
+            src="assets/landing-marks.svg"
+            alt="서울대학교 · 개교 80주년"
+          />
+          <p class="landing-eyebrow">
+            서울대학교 미술대학 80주년 심포지엄<i lang="en"
+              >College of Fine Arts 80th Anniv. Symposium</i
+            >
+          </p>
+          <h1 id="landing-title">
+            10년의 기록, 10년의 비전<i lang="en"
+              >A Decade Recorded,<br />A Decade Envisioned</i
+            >
+          </h1>
+        </button>
+      </section>
+      <section id="home" class="screen" hidden aria-labelledby="home-title">
+        <div id="stripe-field" aria-hidden="true"></div>
+        <h1 id="home-title">궤적 그리기<i lang="en">Create Trajectories</i></h1>
+        <button class="info-button" data-action="info" lang="en">INFO</button
+        ><button
+          id="take-photo"
+          class="vertical-action camera-action"
+          data-stripe="3"
+        >
+          <span>촬영하기 <i lang="en">Take a Photo</i></span></button
+        ><button
+          id="choose-photo"
+          class="vertical-action library-action"
+          data-stripe="4"
+        >
+          <span>가져오기 <i lang="en">Choose a Photo</i></span>
+        </button>
+        <button
+          id="home-archive"
+          class="vertical-action archive-action"
+          data-stripe="1"
+          data-action="archive"
+        >
+          <span>궤적 아카이브 <i lang="en">Archive</i></span>
+        </button>
+        <footer class="logo-bar" aria-label="관련 기관">
+          <a
+            class="logo-link"
+            href="https://art.snu.ac.kr/"
+            target="_blank"
+            rel="noopener noreferrer"
+            ><img src="assets/logo-fine-arts.svg" alt="서울대학교 미술대학"
+          /></a>
+          <a
+            class="logo-link"
+            href="https://visualarts.snu.ac.kr/"
+            target="_blank"
+            rel="noopener noreferrer"
+            ><img src="assets/logo-visual-arts.svg" alt="서울대학교 조형연구소"
+          /></a>
+          <span class="logo-link"
+            ><img src="assets/logo-project-1010.svg" alt="SNU 10-10 Project"
+          /></span>
+          <a
+            class="logo-link"
+            href="https://www.snu.ac.kr/80th-anniversary/"
+            target="_blank"
+            rel="noopener noreferrer"
+            ><img
+              src="assets/logo-anniversary.svg"
+              alt="서울대학교 80주년 기념 엠블럼"
+          /></a>
+        </footer>
+      </section>
+      <section id="photo" class="screen" hidden aria-label="선택한 사진">
+        <div class="photo-backdrop" aria-hidden="true">
+          <img
+            class="photo-decoration"
+            src="assets/photo-decoration.svg"
+            alt=""
+          />
+          <img
+            class="photo-decoration desktop-decoration"
+            src="assets/photo-decoration-2.svg"
+            alt=""
+          />
+          <img
+            class="photo-decoration desktop-decoration"
+            src="assets/photo-decoration-3.svg"
+            alt=""
+          />
+        </div>
+        <div class="photo-content">
+          <div class="photo-frame">
+            <img
+              id="photo-preview"
+              alt="선택한 사진"
+              aria-describedby="photo-notice"
+            />
+            <p id="photo-notice">* 선택된 사진은 궤적 아카이브에 저장됩니다.</p>
+          </div>
+          <div class="create-area">
+            <button id="create" class="color-button">
+              <span>그리기</span><i lang="en">Create</i>
+            </button>
+          </div>
+        </div>
+        <button
+          class="back-button"
+          data-action="home"
+          aria-label="홈으로 돌아가기"
+        >
+          <svg viewBox="44 38 48 49" aria-hidden="true">
+            <path
+              d="M89.0535 72.5939H88.4571C87.9476 72.5939 87.5344 73.0109 87.5344 73.5249V77.9168C87.5344 78.7474 86.5395 79.1621 85.9579 78.5753L68.7695 61.2318C68.5966 61.0573 68.3619 60.9592 68.1169 60.9592H49.3646C48.8552 60.9592 48.4419 60.5421 48.4419 60.0281V40.9311C48.4419 40.417 48.0286 40 47.5192 40H46.9227C46.4133 40 46 40.417 46 40.9311V62.492C46 63.0061 46.4133 63.4231 46.9227 63.4231H67.1049C67.3499 63.4231 67.5846 63.5213 67.7575 63.6957L84.2304 80.3173C84.812 80.9041 84.3998 81.9079 83.5778 81.9079H79.2252C78.7157 81.9079 78.3025 82.3249 78.3025 82.839V83.4408C78.3025 83.9548 78.7157 84.3719 79.2252 84.3719H89.0535C89.563 84.3719 89.9763 83.9548 89.9763 83.4408V73.5238C89.9763 73.0097 89.563 72.5927 89.0535 72.5927"
+              fill="currentColor"
+            />
+          </svg>
+        </button>
+      </section>
+      <section
+        id="processing"
+        class="screen"
+        hidden
+        aria-labelledby="processing-label"
+        aria-busy="true"
+      >
+        <div id="process-frames" aria-hidden="true"></div>
+        <p id="processing-label" class="sr-only">
+          사진의 색과 선에서 궤적을 그리고 있습니다.
+        </p>
+      </section>
+      <section id="finish" class="screen" hidden aria-label="완성된 궤적">
+        <div class="finished-art">
+          <img id="result-preview" alt="사진에서 생성한 궤적과 날짜" />
+        </div>
+        <div class="finish-actions">
+          <button id="download" class="color-button">
+            <span>다운로드</span><i lang="en">Download</i></button
+          ><button id="restart" class="color-button">
+            <span>다시하기</span><i lang="en">Restart</i>
+          </button>
+          <button id="open-record" class="color-button">
+            <span>궤적 아카이브</span><i lang="en">Archive</i>
+          </button>
+        </div>
+        <p id="archive-status" class="sr-only" role="status"></p>
+      </section>
+      <section id="info" class="screen" hidden aria-labelledby="info-title">
+        <div id="info-art" aria-hidden="true"></div>
+        <button
+          id="close-info"
+          class="back-button"
+          aria-label="이전 화면으로 돌아가기"
+        >
+          <svg viewBox="44 38 48 49" aria-hidden="true">
+            <path
+              d="M89.0535 72.5939H88.4571C87.9476 72.5939 87.5344 73.0109 87.5344 73.5249V77.9168C87.5344 78.7474 86.5395 79.1621 85.9579 78.5753L68.7695 61.2318C68.5966 61.0573 68.3619 60.9592 68.1169 60.9592H49.3646C48.8552 60.9592 48.4419 60.5421 48.4419 60.0281V40.9311C48.4419 40.417 48.0286 40 47.5192 40H46.9227C46.4133 40 46 40.417 46 40.9311V62.492C46 63.0061 46.4133 63.4231 46.9227 63.4231H67.1049C67.3499 63.4231 67.5846 63.5213 67.7575 63.6957L84.2304 80.3173C84.812 80.9041 84.3998 81.9079 83.5778 81.9079H79.2252C78.7157 81.9079 78.3025 82.3249 78.3025 82.839V83.4408C78.3025 83.9548 78.7157 84.3719 79.2252 84.3719H89.0535C89.563 84.3719 89.9763 83.9548 89.9763 83.4408V73.5238C89.9763 73.0097 89.563 72.5927 89.0535 72.5927"
+              fill="currentColor"
+            />
+          </svg>
+        </button>
+        <h1 id="info-title" class="sr-only">궤적 그리기 소개</h1>
+        <div class="info-copy">
+          <div lang="ko">
+            <p>
+              ‘궤적 그리기’는 서울대학교 80주년 개교를 기념하여 미술대학에서
+              주최한 심포지엄 &lt;10년의 기록, 10년의 비전&gt;의 참여 디자인
+              프로그램이다.
+            </p>
+            <p>
+              8개의 학과와 연합 전공은 8개의 화살표가 되어, 새로운 궤적을
+              만들어낸다. 참가자가 입력한 이미지의 값에 따라, 각기 다른 화살표
+              조합이 생겨난다.
+            </p>
+            <p>
+              이 웹사이트는 김연주, 이정아, 크리스 하마모토가 함께 만들었다.
+            </p>
+          </div>
+          <div lang="en">
+            <p>
+              ‘Create Tra&shy;jec&shy;to&shy;ries’ is a
+              par&shy;tic&shy;i&shy;pa&shy;tory design program for &lt;A decade
+              Recorded, A decade Envisioned&gt;, a sym&shy;po&shy;sium
+              or&shy;ga&shy;nized by the Col&shy;lege of Fine Arts to
+              com&shy;mem&shy;o&shy;rate the 80th
+              an&shy;ni&shy;ver&shy;sa&shy;ry of Seoul Na&shy;tion&shy;al
+              Uni&shy;ver&shy;si&shy;ty.
+            </p>
+            <p>
+              The eight de&shy;part&shy;ments and
+              in&shy;ter&shy;dis&shy;ci&shy;pli&shy;nary pro&shy;grams take the
+              form of eight ar&shy;rows, com&shy;ing to&shy;geth&shy;er to
+              create new tra&shy;jec&shy;to&shy;ries. Dif&shy;fer&shy;ent
+              com&shy;bi&shy;na&shy;tions of ar&shy;rows are
+              gen&shy;er&shy;at&shy;ed based on val&shy;ues de&shy;rived from
+              im&shy;ages up&shy;load&shy;ed by par&shy;tic&shy;i&shy;pants.
+            </p>
+            <p>
+              This website was created by Yeonjoo Kim, Jung Ah Lee, and Chris
+              Hamamoto.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section
+        id="gallery"
+        class="screen gallery-screen"
+        hidden
+        aria-labelledby="gallery-title"
+      >
+        <header class="gallery-header">
+          <button
+            class="back-button"
+            data-action="home"
+            aria-label="홈으로 돌아가기"
+          >
+            <svg viewBox="44 38 48 49" aria-hidden="true">
+              <path
+                d="M89.0535 72.5939H88.4571C87.9476 72.5939 87.5344 73.0109 87.5344 73.5249V77.9168C87.5344 78.7474 86.5395 79.1621 85.9579 78.5753L68.7695 61.2318C68.5966 61.0573 68.3619 60.9592 68.1169 60.9592H49.3646C48.8552 60.9592 48.4419 60.5421 48.4419 60.0281V40.9311C48.4419 40.417 48.0286 40 47.5192 40H46.9227C46.4133 40 46 40.417 46 40.9311V62.492C46 63.0061 46.4133 63.4231 46.9227 63.4231H67.1049C67.3499 63.4231 67.5846 63.5213 67.7575 63.6957L84.2304 80.3173C84.812 80.9041 84.3998 81.9079 83.5778 81.9079H79.2252C78.7157 81.9079 78.3025 82.3249 78.3025 82.839V83.4408C78.3025 83.9548 78.7157 84.3719 79.2252 84.3719H89.0535C89.563 84.3719 89.9763 83.9548 89.9763 83.4408V73.5238C89.9763 73.0097 89.563 72.5927 89.0535 72.5927"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+          <h1 id="gallery-title">
+            궤적 아카이브<i lang="en">Trajectory Archive</i>
+          </h1>
+        </header>
+        <p id="gallery-status" role="status"></p>
+        <div
+          id="gallery-scroll"
+          class="gallery-scroll"
+          tabindex="0"
+          role="region"
+          aria-label="최신순 궤적 목록"
+        >
+          <div id="gallery-grid" class="gallery-grid"></div>
+          <div id="gallery-sentinel" aria-hidden="true"></div>
+          <button id="gallery-more" class="text-button" hidden>
+            궤적 더 불러오기
+          </button>
+        </div>
+      </section>
+      <section
+        id="record"
+        class="screen record-screen"
+        hidden
+        aria-labelledby="record-title"
+      >
+        <header class="record-header">
+          <button
+            class="back-button"
+            data-action="archive"
+            aria-label="아카이브로 돌아가기"
+          >
+            <svg viewBox="44 38 48 49" aria-hidden="true">
+              <path
+                d="M89.0535 72.5939H88.4571C87.9476 72.5939 87.5344 73.0109 87.5344 73.5249V77.9168C87.5344 78.7474 86.5395 79.1621 85.9579 78.5753L68.7695 61.2318C68.5966 61.0573 68.3619 60.9592 68.1169 60.9592H49.3646C48.8552 60.9592 48.4419 60.5421 48.4419 60.0281V40.9311C48.4419 40.417 48.0286 40 47.5192 40H46.9227C46.4133 40 46 40.417 46 40.9311V62.492C46 63.0061 46.4133 63.4231 46.9227 63.4231H67.1049C67.3499 63.4231 67.5846 63.5213 67.7575 63.6957L84.2304 80.3173C84.812 80.9041 84.3998 81.9079 83.5778 81.9079H79.2252C78.7157 81.9079 78.3025 82.3249 78.3025 82.839V83.4408C78.3025 83.9548 78.7157 84.3719 79.2252 84.3719H89.0535C89.563 84.3719 89.9763 83.9548 89.9763 83.4408V73.5238C89.9763 73.0097 89.563 72.5927 89.0535 72.5927"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+          <h1 id="record-title">
+            궤적 아카이브<i lang="en">Trajectory Archive</i>
+          </h1>
+        </header>
+        <p id="record-description" class="sr-only" role="status"></p>
+        <div class="record-media" id="record-media">
+          <div id="record-images" hidden>
+            <figure>
+              <img id="record-photo" alt="궤적의 바탕이 된 사진" />
+            </figure>
+            <figure>
+              <img
+                id="record-arrows"
+                alt="사진에서 만들어진 궤적과 생성 날짜"
+              />
+            </figure>
+          </div>
+          <button
+            id="delete-record"
+            class="delete-button"
+            aria-label="내 게시물 삭제"
+            hidden
+          >
+            <svg
+              width="16"
+              height="22"
+              viewBox="0 0 16 22"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M11.9898 0C13.0288 7.02079e-05 13.9719 0.607983 14.4019 1.55371L15.5484 4.07715C15.7588 4.54 15.8319 5.05358 15.7584 5.55664L13.7867 19.0332C13.5963 20.3346 12.4798 21.2996 11.1646 21.2998H4.62167C3.30644 21.2997 2.19005 20.3346 1.9996 19.0332L0.0279215 5.55664C-0.0455634 5.05367 0.0266515 4.53993 0.236906 4.07715L1.38437 1.55371C1.81446 0.607969 2.75751 5.22471e-05 3.79648 0H11.9898ZM1.33749 5.53125L3.28573 18.8457C3.3829 19.5085 3.95182 19.9999 4.62167 20H11.1646C11.8344 19.9998 12.4024 19.5084 12.4996 18.8457L14.4488 5.53125H1.33749ZM5.20077 6.92285C5.55946 6.92303 5.85091 7.21458 5.85116 7.57324V17.1885C5.85101 17.5472 5.55952 17.8377 5.20077 17.8379C4.84208 17.8377 4.55151 17.5472 4.55136 17.1885V7.57324C4.55161 7.21462 4.84215 6.92309 5.20077 6.92285ZM7.89316 6.92285C8.25184 6.92303 8.54329 7.21458 8.54355 7.57324V17.1885C8.5434 17.5472 8.2519 17.8377 7.89316 17.8379C7.5344 17.8377 7.24389 17.5472 7.24374 17.1885V7.57324C7.24399 7.21457 7.53446 6.92301 7.89316 6.92285ZM10.5855 6.92285C10.9442 6.92303 11.2357 7.21458 11.2359 7.57324V17.1885C11.2358 17.5472 10.9443 17.8377 10.5855 17.8379C10.2267 17.8378 9.93627 17.5473 9.93612 17.1885V7.57324C9.93638 7.21452 10.2268 6.92292 10.5855 6.92285ZM3.79648 1.30078C3.2672 1.30083 2.78607 1.61 2.56698 2.0918L1.5953 4.23047H14.191L13.2184 2.0918C12.9992 1.61012 12.519 1.30085 11.9898 1.30078H3.79648Z"
+                fill="currentColor"
+                fill-opacity="0.5"
+              />
+            </svg>
+          </button>
+        </div>
+        <nav class="record-navigation" aria-label="게시물 이동">
+          <button
+            id="record-prev"
+            class="arrow-button post-arrow"
+            aria-label="이전 게시물"
+            disabled
+          >
+            <svg viewBox="0 0 142.56 270.11" aria-hidden="true">
+              <path
+                d="M0,66.02V5.67C0,2.54,2.54,0,5.67,0h60.35c3.13,0,5.67,2.54,5.67,5.67v3.66c0,3.13-2.54,5.67-5.67,5.67h-26.72c-5.05,0-7.58,6.11-4.01,9.68l105.61,105.61c1.06,1.06,1.66,2.51,1.66,4.01v130.15c0,3.13-2.54,5.67-5.67,5.67H5.67c-3.13,0-5.67-2.54-5.67-5.67v-3.66c0-3.13,2.54-5.67,5.67-5.67h116.22c3.13,0,5.67-2.54,5.67-5.67v-108.94c0-1.5-.6-2.95-1.66-4.01L24.68,35.28c-3.57-3.57-9.68-1.04-9.68,4.01v26.74c0,3.13-2.54,5.67-5.67,5.67h-3.66C2.54,71.69,0,69.15,0,66.02Z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+          <button
+            id="record-next"
+            class="arrow-button post-arrow"
+            aria-label="다음 게시물"
+            disabled
+          >
+            <svg viewBox="0 0 270.06 270.06" aria-hidden="true">
+              <path
+                d="M198.37,5.67v3.66c0,3.13,2.54,5.67,5.67,5.67h26.73c5.05,0,7.58,6.11,4.01,9.68l-105.55,105.55c-1.06,1.06-1.66,2.51-1.66,4.01v115.15c0,3.13-2.54,5.67-5.67,5.67H5.67c-3.13,0-5.67,2.54-5.67,5.67v3.66c0,3.13,2.54,5.67,5.67,5.67h131.22c3.13,0,5.67-2.54,5.67-5.67v-123.94c0-1.5.6-2.95,1.66-4.01l101.16-101.16c3.57-3.57,9.68-1.04,9.68,4.01v26.73c0,3.13,2.54,5.67,5.67,5.67h3.66c3.13,0,5.67-2.54,5.67-5.67V5.67c0-3.13-2.54-5.67-5.67-5.67h-60.35c-3.13,0-5.67,2.54-5.67,5.67Z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+        </nav>
+        <button id="retry-cloud" class="text-button" hidden>
+          온라인 저장 다시 시도 ↗
+        </button>
+      </section>
+    </main>
+    <input
+      id="camera-file"
+      type="file"
+      accept="image/*"
+      capture="environment"
+      hidden
+    /><input id="library-file" type="file" accept="image/*" hidden />
+    <p id="status" class="sr-only" role="status" aria-live="polite"></p>
+    <div id="error" class="error-toast" role="alert" hidden>
+      <span id="error-message"></span>
+      <button id="retry-error-save" hidden>저장 다시 시도</button>
+      <button id="dismiss-error" aria-label="오류 메시지 닫기">×</button>
+    </div>
+    <dialog
+      id="delete-dialog"
+      aria-labelledby="delete-title"
+      aria-describedby="delete-description"
+    >
+      <h2 id="delete-title">게시물을 삭제할까요?</h2>
+      <p id="delete-description">
+        사진·궤적·포스터가 이 브라우저와 온라인 아카이브에서 삭제됩니다. 삭제
+        후에는 되돌릴 수 없습니다.
+      </p>
+      <div class="delete-actions">
+        <button type="button" id="cancel-delete" class="color-button">
+          <span>취소</span><i lang="en">Cancel</i>
+        </button>
+        <button type="button" id="confirm-delete" class="color-button">
+          <span>삭제</span><i lang="en">Delete</i>
+        </button>
+      </div>
+      <p id="delete-progress" role="status"></p>
+    </dialog>
+    <dialog id="download-dialog" aria-label="이미지 저장">
+      <form method="dialog">
+        <button class="dialog-close" aria-label="닫기">×</button>
+        <button type="button" id="save-arrows" class="color-button">
+          <span>궤적 저장하기</span><i lang="en">Save trajectory</i></button
+        ><button type="button" id="save-poster" class="color-button">
+          <span>포스터 저장하기</span><i lang="en">Save poster</i></button
+        ><button type="button" id="save-both" class="color-button">
+          <span>둘 다 저장하기</span><i lang="en">Save both</i></button
+        ><button type="button" id="download-done" class="color-button">
+          <span>궤적 아카이브</span><i lang="en">Archive</i>
+        </button>
+        <p id="download-status" role="status"></p>
+      </form>
+    </dialog>
+  </body>
+</html>
