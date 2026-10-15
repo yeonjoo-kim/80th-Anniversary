@@ -7,6 +7,7 @@
   const UUID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   let databasePromise, authPromise, session;
+  const saving = new Set();
   const config = () => window.SUPABASE_CONFIG;
   const configured = () =>
     Boolean(config()?.url && config()?.publishableKey && config()?.bucket);
@@ -42,13 +43,17 @@
       tx.onabort = () => reject(tx.error || new Error("Local save aborted"));
     });
   }
-  async function localGet(id) {
+  async function storedRecord(id) {
     const db = await database();
     return new Promise((resolve, reject) => {
       const req = db.transaction(STORE).objectStore(STORE).get(id);
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => reject(req.error);
     });
+  }
+  async function localGet(id) {
+    const record = await storedRecord(id);
+    return record?.deleted ? null : record;
   }
   async function localList(offset = 0, limit = 6) {
     const db = await database();
@@ -61,7 +66,7 @@
         .index("createdAt")
         .openCursor(null, "prev");
       const items = [];
-      let skipped = false;
+      let skipped = 0;
       req.onerror = () => reject(req.error);
       req.onsuccess = () => {
         const cursor = req.result;
@@ -69,9 +74,13 @@
           resolve({ items, hasMore: false });
           return;
         }
-        if (!skipped && offset) {
-          skipped = true;
-          cursor.advance(offset);
+        if (cursor.value.deleted || cursor.value.deletionPending) {
+          cursor.continue();
+          return;
+        }
+        if (skipped < offset) {
+          skipped++;
+          cursor.continue();
           return;
         }
         if (items.length === limit) {
@@ -90,7 +99,7 @@
         .transaction(STORE)
         .objectStore(STORE)
         .index("createdAt")
-        .openKeyCursor(null, "prev");
+        .openCursor(null, "prev");
       let previous = null,
         found = false;
       req.onerror = () => reject(req.error);
@@ -98,6 +107,10 @@
         const cursor = req.result;
         if (!cursor) {
           resolve({ previous: found ? previous : null, next: null });
+          return;
+        }
+        if (cursor.value.deleted || cursor.value.deletionPending) {
+          cursor.continue();
           return;
         }
         if (found) {
@@ -172,7 +185,15 @@
     } catch {}
     return session;
   }
-  async function authenticatedSession() {
+  function currentUserId() {
+    if (!session) {
+      try {
+        session = JSON.parse(localStorage.getItem(SESSION_KEY));
+      } catch {}
+    }
+    return UUID.test(session?.user?.id) ? session.user.id : null;
+  }
+  async function authenticatedSession({ create = true } = {}) {
     if (authPromise) return authPromise;
     authPromise = (async () => {
       if (!session) {
@@ -202,6 +223,11 @@
             localStorage.removeItem(SESSION_KEY);
           } catch {}
         }
+      }
+      if (!create) {
+        const error = new Error("기존 로그인 정보를 확인할 수 없습니다.");
+        error.code = "session_unavailable";
+        throw error;
       }
       // A publishable key identifies the app. Anonymous Auth grants this visitor a private upload identity.
       return rememberSession(
@@ -255,8 +281,24 @@
     return cloud;
   }
   async function onlineSave(record) {
+    if (saving.has(record.id)) throw new Error("Save already in progress");
+    saving.add(record.id);
+    try {
+      return await uploadRecord(record);
+    } finally {
+      saving.delete(record.id);
+    }
+  }
+  async function uploadRecord(record) {
     if (!UUID.test(record.id)) throw new Error("Invalid record ID");
+    const stored = await storedRecord(record.id);
+    if (stored?.deletionPending || stored?.deleted)
+      throw new Error("Deletion is pending or complete");
     const auth = await authenticatedSession();
+    record.ownerId = auth.user.id;
+    try {
+      await localSave(record);
+    } catch {}
     const files = {
       photo: ["photo.jpg", record.photo],
       arrows: ["arrows.png", record.arrows],
@@ -397,8 +439,115 @@
       next: current < 0 ? null : nearby[current + 1]?.id || null,
     };
   }
+  function canDelete(record) {
+    if (!record || !UUID.test(record.id) || saving.has(record.id)) return false;
+    if (!configured())
+      return Boolean(record.photo && record.arrows && record.poster);
+    const uid = currentUserId();
+    if (record.cloud) {
+      try {
+        const expected = `${baseURL()}/storage/v1/object/public/${encodeURIComponent(config().bucket)}/${uid}/${record.id}/photo.jpg`;
+        return Boolean(uid && record.cloud.photoUrl === expected);
+      } catch {
+        return false;
+      }
+    }
+    return Boolean(record.photo && (!record.ownerId || record.ownerId === uid));
+  }
+  async function localRemove(record) {
+    // Keep only a tiny tombstone: no photo blobs or cloud paths remain locally.
+    await localSave({
+      id: record.id,
+      createdAt: record.createdAt,
+      deleted: true,
+    });
+  }
+  async function removeOwn(record) {
+    if (!canDelete(record))
+      throw new Error("이 게시물을 만든 브라우저에서만 삭제할 수 있습니다.");
+    if (saving.has(record.id))
+      throw new Error("저장이 끝난 뒤 다시 시도해 주세요.");
+    if (
+      !configured() ||
+      (!record.cloud && !currentUserId() && !record.ownerId)
+    ) {
+      await localRemove(record);
+      return;
+    }
+    const auth = await authenticatedSession({ create: false });
+    if (record.cloud && !canDelete(record))
+      throw new Error("게시물의 로그인 정보가 다릅니다.");
+    const previous = await localGet(record.id);
+    const pending = { ...record, deletionPending: true, ownerId: auth.user.id };
+    await localSave(pending);
+    let prepared = false;
+    try {
+      const rows = await request("/rest/v1/rpc/prepare_creation_deletion", {
+        token: auth.access_token,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ p_id: record.id }),
+      });
+      prepared = true;
+      const prefix = `${auth.user.id}/${record.id}/`;
+      const paths = ["photo.jpg", "arrows.png", "poster.png"].map(
+        (name) => prefix + name,
+      );
+      if (
+        rows?.length &&
+        [rows[0].photo_path, rows[0].arrows_path, rows[0].poster_path].some(
+          (path, i) => path !== paths[i],
+        )
+      )
+        throw new Error("Invalid deletion paths");
+      await request(
+        `/storage/v1/object/${encodeURIComponent(config().bucket)}`,
+        {
+          token: auth.access_token,
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prefixes: paths }),
+        },
+      );
+      const finished = await request("/rest/v1/rpc/finish_creation_deletion", {
+        token: auth.access_token,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ p_id: record.id }),
+      });
+      if (finished !== true) throw new Error("Deletion did not finish");
+      await localRemove(record);
+    } catch (error) {
+      if (!prepared && [400, 401, 403, 404].includes(error.status)) {
+        if (previous) await localSave(previous);
+        else await localRemove(record);
+      }
+      throw error;
+    }
+  }
+  async function pendingDeletions() {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction(STORE).objectStore(STORE).getAll();
+      request.onsuccess = () =>
+        resolve(request.result.filter((record) => record.deletionPending));
+      request.onerror = () => reject(request.error);
+    });
+  }
+  async function retryPendingDeletions() {
+    const pending = await pendingDeletions();
+    return Promise.allSettled(
+      pending.filter(canDelete).map(async (record) => {
+        await removeOwn(record);
+        return record.id;
+      }),
+    );
+  }
   window.trajectoryArchive = {
     configured,
+    canDelete,
+    removeOwn,
+    retryPendingDeletions,
     localSave,
     localGet,
     localList,
