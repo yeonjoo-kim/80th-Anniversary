@@ -1,0 +1,17 @@
+{
+  "name": "서울대학교 미술대학 80주년 · 궤적 그리기",
+  "short_name": "궤적 그리기",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEEEEF",
+  "theme_color": "#EEEEEF",
+  "icons": [
+    {
+      "src": "assets/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

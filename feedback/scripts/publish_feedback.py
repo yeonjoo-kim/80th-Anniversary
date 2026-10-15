@@ -23,7 +23,7 @@ def workflow(commit):
     files = ['index.html', 'app.js', 'archive.js', 'styles.css',
              'assets/audio/feedback-sprite.wav', 'assets/back-arrows.json', 'assets/favicon.svg',
              'assets/process-1.svg', 'assets/photo-decoration.svg', 'assets/apple-touch-icon.png',
-             'assets/landing.svg', 'assets/audio/session-silence.m4a',
+             'assets/landing.svg', 'manifest.webmanifest', 'assets/audio/session-silence.m4a',
              *[f'assets/audio/tap-{i}.m4a' for i in range(1,9)]]
     expected = {}
     for name in files:
@@ -39,6 +39,7 @@ for attempt in range(24):
             with urllib.request.urlopen(request, timeout=20) as response:
                 assert response.status == 200
                 if path.endswith((".wav", ".m4a")): assert response.headers.get_content_type().startswith("audio/")
+                if path.endswith(".webmanifest"): assert response.headers.get_content_type() in ("application/manifest+json", "application/json")
                 assert hashlib.sha256(response.read()).hexdigest() == digest, "Snapshot still updating"
         print("PASS: anonymous HTTPS access; index, script, stylesheet and audio match the published revision")
         break

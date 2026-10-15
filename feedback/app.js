@@ -526,6 +526,12 @@
     if (state.screen !== "info") return;
     const copy = document.querySelector(".info-copy");
     copy.style.fontSize = "";
+    // Desktop text keeps its readable minimum; the copy can scroll internally.
+    if (
+      matchMedia("(min-width: 1024px), (hover: hover) and (pointer: fine)")
+        .matches
+    )
+      return;
     let size = parseFloat(getComputedStyle(copy).fontSize);
     for (let i = 0; i < 6 && copy.scrollHeight > copy.clientHeight + 1; i++) {
       size *= Math.min(0.97, copy.clientHeight / copy.scrollHeight);
@@ -714,14 +720,12 @@
     if (!svg) return;
     const { width, height } = $("experience").getBoundingClientRect();
     const aspect = width / height;
-    // Mobile keeps the complete 402 × 874 reference frame. A wider camera
-    // shows the original paths beyond that frame, without stretching them.
-    // Desktop includes the bounds of all five paths, including their shafts.
-    const desktop = width >= 1024;
-    const frameWidth = desktop ? 1860 : 402;
-    const frameHeight = desktop ? 1876 : 874;
-    const centerX = desktop ? 241 : 201;
-    const centerY = desktop ? 748 : 437;
+    // One camera for every screen: preserve the reference's center and height.
+    // A wider window reveals more of the same paths to either side.
+    const frameWidth = 402;
+    const frameHeight = 874;
+    const centerX = 201;
+    const centerY = 437;
     const h = Math.max(frameHeight, frameWidth / aspect);
     const w = h * aspect;
     svg.setAttribute(
@@ -730,7 +734,7 @@
     );
   }
   addEventListener("resize", fitLanding);
-  const landingReady = fetch("assets/landing.svg?v=6")
+  const landingReady = fetch("assets/landing.svg?v=7")
     .then((r) => {
       if (!r.ok) throw Error();
       return r.text();

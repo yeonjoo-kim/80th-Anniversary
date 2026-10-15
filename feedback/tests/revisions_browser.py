@@ -13,11 +13,11 @@ const text=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.
 window.exportSVGs=[];const objectURL=URL.createObjectURL;URL.createObjectURL=function(blob){if(blob.type==='image/svg+xml')void blob.text().then(text=>exportSVGs.push(text));return objectURL.call(this,blob);};
 const start=AudioBufferSourceNode.prototype.start;AudioBufferSourceNode.prototype.start=function(...args){if(this.buffer?.length>1){soundCalls.push(args);const data=this.buffer.getChannelData(0),rate=this.buffer.sampleRate,offset=Math.round((args[1]||0)*rate),end=Math.min(data.length,offset+Math.round((args[2]||.1)*rate));let peak=0;for(let i=offset;i<end;i++)peak=Math.max(peak,Math.abs(data[i]));soundLevels.push(peak);}return start.apply(this,args);};'''
 def no_overflow(page,selectors=()):
-    state=page.evaluate('''selectors=>({w:innerWidth,h:innerHeight,document:[document.documentElement.scrollWidth,document.documentElement.scrollHeight],elements:selectors.map(selector=>{const e=document.querySelector(selector),r=e.getBoundingClientRect();return {selector,x:r.x,y:r.y,right:r.right,bottom:r.bottom,scroll:[e.scrollWidth,e.scrollHeight],client:[e.clientWidth,e.clientHeight]};})})''',list(selectors))
+    state=page.evaluate('''selectors=>({w:innerWidth,h:innerHeight,document:[document.documentElement.scrollWidth,document.documentElement.scrollHeight],elements:selectors.map(selector=>{const e=document.querySelector(selector),r=e.getBoundingClientRect();return {selector,x:r.x,y:r.y,right:r.right,bottom:r.bottom,scroll:[e.scrollWidth,e.scrollHeight],client:[e.clientWidth,e.clientHeight],allowY:e.matches(".info-copy")&&getComputedStyle(e).overflowY==="auto"};})})''',list(selectors))
     assert state['document'][0]<=state['w']+1 and state['document'][1]<=state['h']+1,state
     for e in state['elements']:
         assert e['x']>=-1 and e['y']>=-1 and e['right']<=state['w']+1 and e['bottom']<=state['h']+1,state
-        assert e['scroll'][0]<=e['client'][0]+1 and e['scroll'][1]<=e['client'][1]+1,state
+        assert e['scroll'][0]<=e['client'][0]+1 and (e['allowY'] or e['scroll'][1]<=e['client'][1]+1),state
 
 def upload(page,width=160,height=240):
     previous=page.locator('#photo-preview').get_attribute('src')
