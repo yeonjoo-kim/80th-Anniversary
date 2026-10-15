@@ -87,8 +87,8 @@ with sync_playwright() as p:
     viewer=other.new_page();viewer.on('pageerror',lambda e:errors.append(str(e)))
     viewer.goto(BASE+'/#archive');viewer.locator('.archive-card').first.wait_for()
     assert viewer.locator('.archive-card').count()==1 and data['lists']==1
-    viewer.locator('.archive-card').click();assert viewer.locator('.archive-card').first.get_attribute('aria-pressed')=='true'
-    viewer.goto(result_url);viewer.locator('#record-images').wait_for(state='visible')
+    viewer.locator('.archive-card').click();viewer.locator('#record-images').wait_for(state='visible')
+    assert viewer.url==result_url
     for selector in ['#record-photo','#record-arrows']:
         assert viewer.locator(selector).evaluate('(img)=>img.decode().then(()=>img.naturalWidth>0)')
     assert viewer.locator('#share-record').is_visible()

@@ -70,10 +70,26 @@
         <div id="stripe-field" aria-hidden="true"></div>
         <h1 id="home-title">궤적 그리기<i lang="en">Create Trajectories</i></h1>
         <button class="info-button" data-action="info" lang="en">INFO</button
-        ><button id="take-photo" class="vertical-action camera-action">
+        ><button
+          id="take-photo"
+          class="vertical-action camera-action"
+          data-stripe="3"
+        >
           <span>촬영하기 <i lang="en">Take a Photo</i></span></button
-        ><button id="choose-photo" class="vertical-action library-action">
+        ><button
+          id="choose-photo"
+          class="vertical-action library-action"
+          data-stripe="4"
+        >
           <span>가져오기 <i lang="en">Choose a Photo</i></span>
+        </button>
+        <button
+          id="home-archive"
+          class="vertical-action archive-action"
+          data-stripe="1"
+          data-action="archive"
+        >
+          <span>궤적 아카이브 <i lang="en">Archive</i></span>
         </button>
         <footer class="logo-bar" aria-label="관련 기관">
           <a
@@ -109,11 +125,13 @@
         </footer>
       </section>
       <section id="photo" class="screen" hidden aria-label="선택한 사진">
-        <img
-          class="photo-decoration"
-          src="assets/photo-decoration.svg"
-          alt=""
-        />
+        <div class="photo-backdrop" aria-hidden="true">
+          <img
+            class="photo-decoration"
+            src="assets/photo-decoration.svg"
+            alt=""
+          />
+        </div>
         <div class="photo-content">
           <img id="photo-preview" alt="선택한 사진" />
           <div class="create-area">
@@ -158,10 +176,8 @@
           ><button id="restart" class="color-button">
             <span>다시하기</span><i lang="en">Restart</i>
           </button>
-        </div>
-        <div class="finish-meta">
-          <button id="open-record" class="text-button">
-            궤적 아카이브 보기 <i lang="en">Trajectory Archive ↗</i>
+          <button id="open-record" class="color-button">
+            <span>궤적 아카이브</span><i lang="en">Archive</i>
           </button>
         </div>
         <p id="archive-status" class="sr-only" role="status"></p>
@@ -200,20 +216,27 @@
           </div>
           <div lang="en">
             <p>
-              ‘Create Trajectories’ is a participatory design program for &lt;A
-              Decade of Records, A Decade of Vision&gt;, a symposium organized
-              by the College of Fine Arts to commemorate the 80th anniversary of
-              Seoul National University.
+              ‘Create Tra&shy;jec&shy;to&shy;ries’ is a
+              par&shy;tic&shy;i&shy;pa&shy;tory design program for &lt;A
+              De&shy;cade of Rec&shy;ords, A De&shy;cade of Vi&shy;sion&gt;, a
+              sym&shy;po&shy;sium or&shy;ga&shy;nized by the Col&shy;lege of
+              Fine Arts to com&shy;mem&shy;o&shy;rate the 80th
+              an&shy;ni&shy;ver&shy;sa&shy;ry of Seoul Na&shy;tion&shy;al
+              Uni&shy;ver&shy;si&shy;ty.
             </p>
             <p>
-              The eight departments and interdisciplinary programs take the form
-              of eight arrows, coming together to create new trajectories.
-              Different combinations of arrows are generated based on values
-              derived from images uploaded by participants.
+              The eight de&shy;part&shy;ments and
+              in&shy;ter&shy;dis&shy;ci&shy;pli&shy;nary pro&shy;grams take the
+              form of eight ar&shy;rows, com&shy;ing to&shy;geth&shy;er to
+              create new tra&shy;jec&shy;to&shy;ries. Dif&shy;fer&shy;ent
+              com&shy;bi&shy;na&shy;tions of ar&shy;rows are
+              gen&shy;er&shy;at&shy;ed based on val&shy;ues de&shy;rived from
+              im&shy;ages up&shy;load&shy;ed by par&shy;tic&shy;i&shy;pants.
             </p>
             <p>
-              This website was created by Chris Hamamoto together with members
-              of his research team, Yeonjoo Kim and Jungah Lee.
+              This web&shy;site was cre&shy;at&shy;ed by Chris Hamamoto
+              to&shy;geth&shy;er with mem&shy;bers of his re&shy;search team,
+              Yeonjoo Kim and Jungah Lee.
             </p>
           </div>
         </div>
@@ -242,12 +265,19 @@
           </h1>
         </header>
         <p id="gallery-status" role="status"></p>
-        <div id="gallery-grid" class="gallery-grid"></div>
-        <nav class="gallery-pagination" aria-label="아카이브 페이지">
-          <button id="gallery-prev" aria-label="이전 궤적">←</button
-          ><span id="gallery-page"></span
-          ><button id="gallery-next" aria-label="다음 궤적">→</button>
-        </nav>
+        <div
+          id="gallery-scroll"
+          class="gallery-scroll"
+          tabindex="0"
+          role="region"
+          aria-label="최신순 궤적 목록"
+        >
+          <div id="gallery-grid" class="gallery-grid"></div>
+          <div id="gallery-sentinel" aria-hidden="true"></div>
+          <button id="gallery-more" class="text-button" hidden>
+            궤적 더 불러오기
+          </button>
+        </div>
       </section>
       <section
         id="record"
@@ -256,7 +286,11 @@
         aria-labelledby="record-title"
       >
         <header class="record-header">
-          <button class="back-button" data-action="home" aria-label="홈으로">
+          <button
+            class="back-button"
+            data-action="archive"
+            aria-label="아카이브로 돌아가기"
+          >
             <svg viewBox="44 38 48 49" aria-hidden="true">
               <path
                 d="M89.0535 72.5939H88.4571C87.9476 72.5939 87.5344 73.0109 87.5344 73.5249V77.9168C87.5344 78.7474 86.5395 79.1621 85.9579 78.5753L68.7695 61.2318C68.5966 61.0573 68.3619 60.9592 68.1169 60.9592H49.3646C48.8552 60.9592 48.4419 60.5421 48.4419 60.0281V40.9311C48.4419 40.417 48.0286 40 47.5192 40H46.9227C46.4133 40 46 40.417 46 40.9311V62.492C46 63.0061 46.4133 63.4231 46.9227 63.4231H67.1049C67.3499 63.4231 67.5846 63.5213 67.7575 63.6957L84.2304 80.3173C84.812 80.9041 84.3998 81.9079 83.5778 81.9079H79.2252C78.7157 81.9079 78.3025 82.3249 78.3025 82.839V83.4408C78.3025 83.9548 78.7157 84.3719 79.2252 84.3719H89.0535C89.563 84.3719 89.9763 83.9548 89.9763 83.4408V73.5238C89.9763 73.0097 89.563 72.5927 89.0535 72.5927"
@@ -264,7 +298,9 @@
               />
             </svg>
           </button>
-          <h1 id="record-title">나의 궤적<i lang="en">My trajectory</i></h1>
+          <h1 id="record-title">
+            궤적 아카이브<i lang="en">Trajectory Archive</i>
+          </h1>
           <button id="share-record" class="text-button" hidden>
             링크 복사 ↗
           </button>
@@ -307,17 +343,17 @@
       <button id="retry-error-save" hidden>저장 다시 시도</button>
       <button id="dismiss-error" aria-label="오류 메시지 닫기">×</button>
     </div>
-    <dialog id="download-dialog" aria-labelledby="download-title">
+    <dialog id="download-dialog" aria-label="이미지 저장">
       <form method="dialog">
         <button class="dialog-close" aria-label="닫기">×</button>
-        <h2 id="download-title">나의 궤적 간직하기</h2>
-        <p>휴대폰에서 공유 메뉴가 열리면 ‘이미지 저장’을 선택하세요.</p>
         <button type="button" id="save-arrows" class="color-button">
           <span>궤적 저장하기</span><i lang="en">Save trajectory</i></button
         ><button type="button" id="save-poster" class="color-button">
           <span>포스터 저장하기</span><i lang="en">Save poster</i></button
-        ><button type="button" id="download-done" class="text-button">
-          궤적 아카이브 보기 ↗
+        ><button type="button" id="save-both" class="color-button">
+          <span>둘 다 저장하기</span><i lang="en">Save both</i></button
+        ><button type="button" id="download-done" class="color-button">
+          <span>궤적 아카이브</span><i lang="en">Archive</i>
         </button>
         <p id="download-status" role="status"></p>
       </form>

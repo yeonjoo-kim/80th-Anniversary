@@ -1,4 +1,18 @@
 @font-face {
+  font-family: "Pretendard";
+  src: url("assets/fonts/Pretendard-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Playfair Display";
+  src: url("assets/fonts/PlayfairDisplay-Regular.ttf") format("truetype");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
   font-family: "KoPubWorld Batang";
   src: url("assets/fonts/KoPubWorldBatang-Light.woff2") format("woff2");
   font-weight: 300;
@@ -126,19 +140,13 @@ i {
 }
 .landing-arrow {
   transform-box: fill-box;
-  transform-origin: center;
-  animation: drop-block 1.2s cubic-bezier(0.22, 0.68, 0.24, 1) both;
-  animation-delay: calc(var(--block) * 110ms);
+  transform-origin: 50% 100%;
+  animation: drop-block 3.6s cubic-bezier(0.55, 0.02, 0.9, 0.45) both;
+  animation-delay: calc(var(--block) * 330ms);
 }
 @keyframes drop-block {
   0% {
-    transform: translateY(-130vh) rotate(-12deg);
-  }
-  65% {
-    transform: translateY(16px) rotate(2deg);
-  }
-  82% {
-    transform: translateY(-10px) rotate(-1deg);
+    transform: translate(-4vw, -130vh) rotate(-28deg);
   }
   100% {
     transform: translateY(0) rotate(0);
@@ -157,6 +165,7 @@ i {
 .landing-eyebrow i {
   display: block;
   font-size: 0.95em;
+  font-style: normal;
 }
 .landing-enter h1 {
   position: absolute;
@@ -185,10 +194,14 @@ i {
   background: transparent;
   z-index: 5;
   font-size: 13px;
+  font-family: "Pretendard", sans-serif;
+  font-weight: 400;
+  font-style: normal;
   border-radius: 8px;
-  transition:
-    background-color 0.12s,
-    color 0.12s;
+}
+#home {
+  --library-level: 42%;
+  --action-step: 17%;
 }
 #stripe-field {
   position: absolute;
@@ -242,13 +255,19 @@ i {
   left: 37.5%;
 }
 .camera-action span {
-  top: 59%;
+  top: calc(var(--library-level) + var(--action-step));
 }
 .library-action {
   left: 50%;
 }
 .library-action span {
-  top: 42%;
+  top: var(--library-level);
+}
+.archive-action {
+  left: 12.5%;
+}
+.archive-action span {
+  top: calc(var(--library-level) + var(--action-step) + var(--action-step));
 }
 .logo-bar {
   position: absolute;
@@ -269,12 +288,28 @@ i {
   width: 100%;
   height: auto;
 }
+.photo-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+}
 .photo-decoration {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  transform-origin: 65% 85%;
+  animation: timber-drift 10.8s cubic-bezier(0.45, 0, 0.55, 1) infinite
+    alternate;
+}
+@keyframes timber-drift {
+  from {
+    transform: translate(-3%, -1%) rotate(-5deg);
+  }
+  to {
+    transform: translate(4%, 4%) rotate(5deg);
+  }
 }
 .photo-content {
   display: flex;
@@ -356,7 +391,7 @@ i {
   top: max(13%, calc(var(--safe-top) + 36px));
   left: 0;
   right: 0;
-  bottom: 23%;
+  bottom: 20%;
 }
 .finished-art img {
   width: 100%;
@@ -368,17 +403,17 @@ i {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(8.5% + var(--safe-bottom));
+  bottom: max(4%, var(--safe-bottom));
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.finish-meta {
-  position: absolute;
-  bottom: calc(1.5% + var(--safe-bottom));
-  left: 4px;
-  right: 4px;
-  display: flex;
-  justify-content: center;
+.finish-actions .color-button {
+  min-width: 0;
+  padding: 10px 4px;
+  font-size: clamp(11px, 3.4vw, 15px);
+}
+.finish-actions .color-button i {
+  font-size: inherit;
 }
 .text-button {
   background: transparent;
@@ -414,11 +449,14 @@ i {
   position: absolute;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
 }
 #info-art svg {
   height: 100%;
   width: 100%;
   position: absolute;
+  transform: scale(1.12);
+  transform-origin: left center;
 }
 .info-copy {
   position: absolute;
@@ -430,6 +468,9 @@ i {
   line-height: 1.5;
   word-break: keep-all;
   transform-origin: top left;
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
 }
 .info-copy p {
   margin: 0 0 22px;
@@ -438,6 +479,13 @@ i {
   margin-top: 36px;
   line-height: 1.3;
   word-break: normal;
+  font-style: normal;
+  text-justify: inter-word;
+  hyphenate-limit-chars: 6 3 3;
+}
+.info-copy [lang="ko"] {
+  word-break: normal;
+  line-break: strict;
 }
 .info-copy [lang="en"] p {
   margin-bottom: 20px;
@@ -480,13 +528,26 @@ i {
 #gallery-status:empty {
   display: none;
 }
-.gallery-grid {
+.gallery-scroll {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+}
+.gallery-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+#gallery-sentinel {
+  height: 1px;
+}
+#gallery-more {
+  display: block;
+  margin: 12px auto;
 }
 .archive-card {
   position: relative;
@@ -498,7 +559,8 @@ i {
   overflow: hidden;
   border-radius: 4px;
   box-shadow: inset 0 0 0 2px var(--button-color, transparent);
-  touch-action: none;
+  aspect-ratio: 4 / 5;
+  touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -515,33 +577,13 @@ i {
 }
 .archive-card .archive-photo {
   opacity: 0;
-  object-fit: contain;
+  object-fit: cover;
 }
-.archive-card.is-photo-ready.is-pressed .archive-photo,
-.archive-card.is-photo-ready[aria-pressed="true"] .archive-photo {
+.archive-card.is-photo-ready.is-pressed .archive-photo {
   opacity: 1;
 }
 .archive-card:focus-visible {
   outline-offset: -3px;
-}
-.gallery-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-  flex-shrink: 0;
-  height: 44px;
-}
-.gallery-pagination button {
-  min-width: 48px;
-  height: 40px;
-  background: transparent;
-  border-radius: 10px;
-  font-size: 24px;
-}
-.gallery-pagination span {
-  font-family: var(--date);
-  font-size: 13px;
 }
 .record-screen {
   display: flex;
@@ -586,14 +628,15 @@ i {
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr 1.4fr auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 8px;
 }
 .record-screen figure {
   margin: 0;
   position: relative;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -610,6 +653,7 @@ i {
   justify-content: space-between;
 }
 .record-downloads {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
@@ -680,11 +724,19 @@ dialog h2 {
 dialog p {
   font-size: 12px;
   line-height: 1.5;
+  margin: 8px 0 0;
+}
+#download-status:empty {
+  display: none;
 }
 dialog .color-button {
   width: 100%;
   margin-top: 10px;
   min-height: 58px;
+  padding: 8px 12px;
+}
+dialog form {
+  padding-top: 14px;
 }
 dialog .text-button {
   display: block;
@@ -740,9 +792,6 @@ dialog .text-button {
   .logo-bar {
     bottom: max(2%, var(--safe-bottom));
   }
-  .finish-meta .text-button {
-    font-size: 11px;
-  }
   .gallery-header {
     min-height: 54px;
   }
@@ -751,6 +800,10 @@ dialog .text-button {
   }
 }
 @media (orientation: landscape) and (max-height: 500px) {
+  .vertical-action {
+    bottom: 25%;
+    font-size: clamp(8px, 2.3dvh, 11px);
+  }
   .info-copy {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -773,7 +826,6 @@ dialog .text-button {
   }
   .gallery-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
   .gallery-header {
     min-height: 44px;
@@ -789,13 +841,6 @@ dialog .text-button {
     padding-bottom: 4px;
     gap: 4px;
   }
-  .gallery-pagination {
-    height: 32px;
-  }
-  .gallery-pagination button {
-    height: 32px;
-    font-size: 20px;
-  }
   .finish-actions .color-button {
     min-height: 44px;
     padding: 6px;
@@ -803,11 +848,6 @@ dialog .text-button {
   }
   .finish-actions .color-button i {
     font-size: 12px;
-  }
-  .finish-meta .text-button {
-    font-size: 9px;
-    min-height: 28px;
-    padding: 4px;
   }
   .landing-eyebrow {
     font-size: 10px;
@@ -848,13 +888,6 @@ dialog .text-button {
   z-index: 1;
   pointer-events: none;
   border-radius: inherit;
-}
-.gallery-pagination button {
-  padding: 0;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .landing-marks {

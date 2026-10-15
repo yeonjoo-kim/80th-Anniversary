@@ -33,6 +33,9 @@ with sync_playwright() as p:
     page=c.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(BASE);page.locator('#landing-art .landing-arrow').first.wait_for()
     page.evaluate('document.fonts.ready')
+    assert page.locator('.landing-arrow').first.evaluate('(e)=>getComputedStyle(e).animationDuration')=='3.6s'
+    assert page.locator('.landing-eyebrow i').evaluate('(e)=>getComputedStyle(e).fontStyle')=='normal'
+    assert page.evaluate('feedbackCalls.length')==0
     assert page.locator('#landing-art .landing-arrow').count()==5
     assert page.locator('#feedback-toggle').count()==0
     assert page.locator('#replace-photo').count()==0
@@ -43,7 +46,10 @@ with sync_playwright() as p:
     page.set_viewport_size({'width':390,'height':844})
     page.locator('#enter').tap();page.locator('#home').wait_for(state='visible')
     for w,h in VIEWPORTS:
-        page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#home','#home-title','#take-photo','#choose-photo','.logo-bar'])
+        page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#home','#home-title','#take-photo','#choose-photo','#home-archive','.logo-bar'])
+        centers=page.locator('#choose-photo span, #take-photo span, #home-archive span').evaluate_all('es=>Object.fromEntries(es.map(e=>{const r=e.getBoundingClientRect();return[e.parentElement.id,{x:r.x,y:r.y,bottom:r.bottom,center:r.y+r.height/2}];}))')
+        assert abs((centers['take-photo']['center']-centers['choose-photo']['center'])-(centers['home-archive']['center']-centers['take-photo']['center']))<1,centers
+        assert page.locator('#home-archive').evaluate('(e)=>{const r=e.getBoundingClientRect(),p=e.parentElement.getBoundingClientRect();return Math.abs(r.x-p.x-p.width*.125)<1;}')
         for image in page.locator('.logo-bar img').all():
             box=image.bounding_box();assert box['y']+box['height']<=h+1
     page.set_viewport_size({'width':390,'height':844})
@@ -54,6 +60,12 @@ with sync_playwright() as p:
     assert page.locator('#choose-photo i').evaluate('(e)=>getComputedStyle(e).fontWeight')=='500'
     assert 'Playfair Display' in page.locator('#choose-photo i').evaluate('(e)=>getComputedStyle(e).fontFamily')
     assert page.evaluate('document.fonts.check(\'italic 500 16px "Playfair Display"\')')
+    assert page.locator('#home .info-button').evaluate('(e)=>({family:getComputedStyle(e).fontFamily,weight:getComputedStyle(e).fontWeight,style:getComputedStyle(e).fontStyle})')=={'family':'Pretendard, sans-serif','weight':'400','style':'normal'}
+    page.wait_for_function('soundCalls.length>0')
+    sound_count=page.evaluate('soundCalls.length');page.wait_for_timeout(100)
+    page.locator('#home .info-button').hover()
+    page.wait_for_function('(count)=>soundCalls.length>count',arg=sound_count)
+    assert page.locator('#home .info-button').evaluate('(e)=>getComputedStyle(e).backgroundColor')=='rgba(0, 0, 0, 0)'
     # Dragging the photo-choice column must animate its color without opening a native picker.
     box=page.locator('#choose-photo').bounding_box();x=box['x']+box['width']/2;y=box['y']+box['height']/2
     changes=[]
@@ -75,7 +87,10 @@ with sync_playwright() as p:
             geometry=page.evaluate('''()=>{const i=document.querySelector('#photo-preview'),r=i.getBoundingClientRect(),b=document.querySelector('#create').getBoundingClientRect();return{ratio:i.naturalWidth/i.naturalHeight,fit:getComputedStyle(i).objectFit,bottom:r.bottom,button:b.y,gap:parseFloat(getComputedStyle(document.querySelector('.create-area')).marginTop)};}''')
             assert geometry['fit']=='contain' and abs(geometry['button']-geometry['bottom']-geometry['gap'])<1.5,geometry
     page.set_viewport_size({'width':390,'height':844});upload(page)
-    page.locator('#create').tap();page.locator('#finish').wait_for(state='visible',timeout=15000)
+    page.locator('#create').tap();page.locator('#processing').wait_for(state='visible')
+    sound_count=page.evaluate('soundCalls.length')
+    page.wait_for_function('(count)=>soundCalls.length>count',arg=sound_count,timeout=1200)
+    page.locator('#finish').wait_for(state='visible',timeout=15000)
     page.wait_for_function("document.getElementById('archive-status').textContent.includes('이 브라우저에 저장됨')")
     box=page.locator('#archive-status').bounding_box();assert box['width']<=1 and box['height']<=1
     current=page.locator('#result-preview').get_attribute('src')
@@ -85,42 +100,70 @@ with sync_playwright() as p:
     assert page.evaluate('feedbackCalls.length')>0
     calls=page.evaluate('soundCalls');assert calls and all(len(x)==3 and .07<=x[2]<=.09 for x in calls),calls
     for w,h in VIEWPORTS:
-        page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#finish','.finished-art','.finish-actions','.finish-meta'])
+        page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#finish','.finished-art','.finish-actions','#open-record'])
+        widths=page.locator('.finish-actions > button').evaluate_all('es=>es.map(e=>e.getBoundingClientRect().width)')
+        assert len(widths)==3 and max(widths)-min(widths)<1,widths
         page.locator('#finish .info-button').click();page.locator('#info').wait_for(state='visible')
         page.wait_for_timeout(50);no_overflow(page,['#info','.info-copy','#close-info'])
+        assert page.locator('.info-copy').evaluate('(e)=>getComputedStyle(e).textAlign')=='justify'
+        assert page.locator('.info-copy [lang=en]').evaluate('(e)=>getComputedStyle(e).fontStyle')=='normal'
         page.locator('#close-info').click();page.locator('#finish').wait_for(state='visible')
     page.set_viewport_size({'width':390,'height':844})
     page.locator('#download').tap()
+    assert page.locator('#download-title').count()==0
     assert page.locator('#save-arrows span').inner_text()=='궤적 저장하기'
     assert page.locator('#save-poster span').inner_text()=='포스터 저장하기'
-    # This Chromium context uses the standard download fallback, never a platform share sheet.
-    with page.expect_download() as dl:page.locator('#save-arrows').click()
-    arrows=assert_png(dl.value)
-    page.wait_for_url('**/#archive');page.locator('.archive-card').first.wait_for()
+    assert page.locator('#save-both span').inner_text()=='둘 다 저장하기'
+    assert page.locator('#download-done span').inner_text()=='궤적 아카이브'
+    for w,h in VIEWPORTS:
+        page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#download-dialog','#download-dialog form'])
+    page.set_viewport_size({'width':390,'height':844})
+    downloads=[];page.on('download',lambda download:downloads.append(download))
+    page.locator('#save-both').tap();page.wait_for_url('**/#archive')
+    for _ in range(20):
+        if len(downloads)==2:break
+        page.wait_for_timeout(100)
+    assert len(downloads)==2,[d.suggested_filename for d in downloads]
+    arrows=assert_png(next(d for d in downloads if '-arrows-' in d.suggested_filename))
+    poster=assert_png(next(d for d in downloads if '-poster-' in d.suggested_filename));assert arrows!=poster
+    page.locator('.archive-card').first.wait_for()
     card=page.locator('.archive-card').first
     assert card.locator('.archive-photo').get_attribute('src') is None
-    card.tap();assert card.get_attribute('aria-pressed')=='true'
-    page.wait_for_function('document.querySelector(".archive-card").classList.contains("is-photo-ready")')
-    page.wait_for_function('getComputedStyle(document.querySelector(".archive-photo")).opacity==="1"')
-    card.tap();assert card.get_attribute('aria-pressed')=='false'
-    page.wait_for_function('getComputedStyle(document.querySelector(".archive-photo")).opacity==="0"')
-    # A held press reveals only while held; it must not turn into a latched tap.
+    assert card.locator('.archive-photo').evaluate('(e)=>getComputedStyle(e).objectFit')=='cover'
+    # A held press previews the photo, while a short tap opens the pair side by side.
     box=card.bounding_box();page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2)
     page.mouse.down();page.wait_for_timeout(400)
-    assert card.locator('.archive-photo').evaluate('(e)=>getComputedStyle(e).opacity')=='1'
+    page.wait_for_function('getComputedStyle(document.querySelector(".archive-photo")).opacity==="1"')
     page.mouse.up();page.wait_for_timeout(160)
-    assert card.get_attribute('aria-pressed')=='false'
+    assert page.url.endswith('#archive')
     assert card.locator('.archive-photo').evaluate('(e)=>getComputedStyle(e).opacity')=='0'
-    # Seed extra local participants to exercise bounded pages and persistence.
-    stored=page.evaluate('''async()=>{const list=await trajectoryArchive.localList();const r=list.items[0];for(let i=1;i<=8;i++)await trajectoryArchive.localSave({...r,id:'00000000-0000-4000-8000-'+String(i).padStart(12,'0'),createdAt:new Date(Date.parse(r.createdAt)-i*60000).toISOString()});return r.id;}''')
-    page.reload();page.locator('.archive-card').first.wait_for();assert page.locator('.archive-card').count()==6
-    first=page.locator('.archive-card').first.get_attribute('data-record-id')
-    page.locator('#gallery-next').tap();page.wait_for_function('document.querySelector("#gallery-page").textContent==="2"')
-    assert page.locator('.archive-card').count()==3 and page.locator('#gallery-next').is_disabled()
-    page.locator('#gallery-prev').tap();page.wait_for_function('document.querySelector("#gallery-page").textContent==="1"')
-    assert page.locator('.archive-card').first.get_attribute('data-record-id')==first
+    card.tap();page.locator('#record-images').wait_for(state='visible')
+    geometry=page.locator('#record-images figure').evaluate_all('es=>es.map(e=>e.getBoundingClientRect().toJSON())')
+    assert len(geometry)==2 and geometry[0]['right']<=geometry[1]['x'] and abs(geometry[0]['y']-geometry[1]['y'])<1,geometry
+    page.locator('#record [data-action="archive"]').tap();page.locator('.archive-card').wait_for()
+    # Seed enough participants for several scroll batches, newest first, with no page numbering.
+    stored=page.evaluate('''async()=>{const list=await trajectoryArchive.localList();const r=list.items[0];for(let i=1;i<=30;i++)await trajectoryArchive.localSave({...r,id:'00000000-0000-4000-8000-'+String(i).padStart(12,'0'),createdAt:new Date(Date.parse(r.createdAt)-i*60000).toISOString()});return r.id;}''')
+    page.reload();page.locator('.archive-card').first.wait_for()
+    assert page.locator('.gallery-pagination, #gallery-page').count()==0
+    assert page.locator('.archive-card').count()==12
+    assert page.locator('.archive-card').first.get_attribute('data-record-id')==stored
+    page.locator('#gallery-scroll').evaluate('e=>e.scrollTop=e.scrollHeight')
+    page.wait_for_function('document.querySelectorAll(".archive-card").length===24')
+    page.locator('#gallery-scroll').evaluate('e=>e.scrollTop=e.scrollHeight')
+    page.wait_for_function('document.querySelectorAll(".archive-card").length===31')
+    ids=page.locator('.archive-card').evaluate_all('es=>es.map(e=>e.dataset.recordId)');assert len(set(ids))==31
+    assert ids[1:]==['00000000-0000-4000-8000-'+str(i).zfill(12) for i in range(1,31)]
+    assert page.locator('#gallery-scroll').evaluate('e=>e.scrollHeight>e.clientHeight')
+    selected=page.locator('.archive-card').nth(18);selected.scroll_into_view_if_needed()
+    before=page.locator('#gallery-scroll').evaluate('e=>e.scrollTop');selected.tap()
+    page.locator('#record-images').wait_for(state='visible')
+    page.locator('#record [data-action="archive"]').tap();page.locator('#gallery').wait_for(state='visible')
+    assert page.locator('.archive-card').count()==31
+    assert abs(page.locator('#gallery-scroll').evaluate('e=>e.scrollTop')-before)<1
     for w,h in VIEWPORTS:
-        page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#gallery','.gallery-grid','.gallery-pagination'])
+        page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#gallery','.gallery-header'])
+        ratio=page.locator('.archive-card').first.evaluate('(e)=>{const r=e.getBoundingClientRect();return r.width/r.height;}')
+        assert abs(ratio-.8)<.002,ratio
     # Old private result links remain usable without reintroducing My Trajectory into the new flow.
     page.set_viewport_size({'width':390,'height':844});page.goto(BASE+'/#result/'+stored)
     page.locator('#record-images').wait_for(state='visible')
@@ -143,5 +186,32 @@ with sync_playwright() as p:
     old.mouse.move(0,0)
     old.wait_for_function('getComputedStyle(document.querySelector(".archive-photo")).opacity==="0"')
     desktop.close()
+    # Eight supplied SVG shapes advance at 1-second intervals; native mobile share receives both PNGs once.
+    native=b.new_context(viewport={'width':390,'height':844},has_touch=True,is_mobile=True,user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1')
+    native.route('**/supabase-config.js',lambda r:r.fulfill(content_type='application/javascript',body='window.SUPABASE_CONFIG=null;'))
+    native.add_init_script('''window.shareCalls=[];Object.defineProperty(navigator,'canShare',{value:({files})=>files.length===2});Object.defineProperty(navigator,'share',{configurable:true,writable:true,value:async value=>{shareCalls.push({active:navigator.userActivation.isActive,files:value.files.map(f=>({name:f.name,size:f.size,type:f.type}))});}});''')
+    phone=native.new_page();phone.on('pageerror',lambda e:errors.append(str(e)))
+    with phone.expect_response('**/assets/back-arrows.json') as response:phone.goto(BASE+'/#home')
+    response.value.body();upload(phone)
+    back=phone.locator('#photo .back-button');phone.wait_for_function('document.querySelector("#photo .back-button").dataset.arrow!==undefined')
+    shapes=[]
+    for i in range(8):
+        shape=back.get_attribute('data-arrow');shapes.append(shape)
+        if i<7:phone.wait_for_function('(previous)=>document.querySelector("#photo .back-button").dataset.arrow!==previous',arg=shape,timeout=1800)
+    assert len(set(shapes))==8,shapes
+    phone.emulate_media(reduced_motion='reduce')
+    frozen=back.get_attribute('data-arrow');phone.wait_for_timeout(1100);assert back.get_attribute('data-arrow')==frozen
+    phone.locator('#create').tap();phone.locator('#finish').wait_for(state='visible')
+    phone.locator('#download').tap();phone.locator('#save-both').tap();phone.wait_for_url('**/#archive')
+    shared=phone.evaluate('shareCalls');assert len(shared)==1 and shared[0]['active'] and len(shared[0]['files'])==2,shared
+    assert all(f['type']=='image/png' and f['size']>1000 for f in shared[0]['files'])
+    assert shared[0]['files'][0]['name']!=shared[0]['files'][1]['name']
+    phone.evaluate('location.hash="#finish"');phone.locator('#finish').wait_for(state='visible');phone.locator('#download').tap()
+    phone.evaluate('Object.defineProperty(navigator,"share",{value:async()=>{throw new DOMException("cancel","AbortError");},configurable:true})')
+    phone.locator('#save-both').tap();phone.wait_for_function('document.querySelector("#download-status").textContent.includes("취소")')
+    assert phone.locator('#download-dialog').is_visible() and phone.url.endswith('#finish')
+    assert phone.locator('#save-both').is_enabled()
+    assert not errors,errors
+    native.close()
     b.close()
-print('PASS: 10 viewports, full visible content, tall/natural photos, 2s colors, 800ms alternation, sliced sound/vibration calls, fonts, logo links, drag suppression, gallery lazy photo/tap/hold/hover/pagination/restore, v1 database upgrade, legacy result, distinct PNG exports, reduced motion.')
+print('PASS: 10 viewports, full visible content, photo aspect ratios, 2s/800ms timers, hover and processing sound, regular/italic typography, home archive spacing, equal Fin actions, dual PNG download, 4:5 scroll archive, newest-first batches, photo preview/detail/back restoration, v1 migration, reduced motion.')

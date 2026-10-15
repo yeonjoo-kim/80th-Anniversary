@@ -26,7 +26,12 @@
     recordUrls: [],
     previewUrls: [],
     viewedRecord: null,
-    galleryPage: 0,
+    galleryOffset: 0,
+    galleryHasMore: true,
+    galleryLoading: false,
+    galleryLoaded: false,
+    galleryScrollTop: 0,
+    galleryIds: new Set(),
     galleryUrls: [],
   };
   let stripeOrder = [],
@@ -35,6 +40,7 @@
     lastFeedback = 0,
     homeTimer,
     previewTimer,
+    backTimer,
     gallerySerial = 0,
     recordSerial = 0;
 
@@ -107,10 +113,11 @@
         return stripe;
       }),
     );
-    $("take-photo").dataset.lastColor = stripeOrder[3].hex;
-    $("choose-photo").dataset.lastColor = stripeOrder[4].hex;
-    $("take-photo").style.color = ink(stripeOrder[3]);
-    $("choose-photo").style.color = ink(stripeOrder[4]);
+    document.querySelectorAll(".vertical-action").forEach((button) => {
+      const color = stripeOrder[Number(button.dataset.stripe)];
+      button.dataset.lastColor = color.hex;
+      button.style.color = ink(color);
+    });
   }
   function randomizeHome() {
     stripeOrder = shuffle(palette);
@@ -133,18 +140,21 @@
   const audioBytes = fetch("assets/audio/revolver-spin.mp3")
     .then((r) => (r.ok ? r.arrayBuffer() : null))
     .catch(() => null);
-  function feedback() {
+  function feedback({ vibrate = true, unlock = true } = {}) {
+    if (!unlock && audioContext?.state !== "running") return;
     if (performance.now() - lastFeedback < 70) return;
     lastFeedback = performance.now();
     try {
-      navigator.vibrate?.(18);
+      if (vibrate) navigator.vibrate?.(18);
     } catch {}
     try {
       const AudioCtor = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtor) return;
       audioContext ||= new AudioCtor();
-      if (audioContext.state === "suspended")
-        audioContext.resume().catch(() => {});
+      const resumed =
+        audioContext.state === "suspended" && unlock
+          ? audioContext.resume().catch(() => {})
+          : Promise.resolve();
       audioDecoding ||= audioBytes
         .then((bytes) =>
           bytes ? audioContext.decodeAudioData(bytes.slice(0)) : null,
@@ -155,7 +165,7 @@
         })
         .catch(() => null);
       const play = (buffer) => {
-        if (!buffer) return;
+        if (!buffer || audioContext.state !== "running") return;
         const [offset, duration] = soundCues[nextSound++ % soundCues.length];
         const source = audioContext.createBufferSource(),
           gain = audioContext.createGain(),
@@ -169,8 +179,11 @@
         gain.connect(audioContext.destination);
         source.start(now, offset, duration);
       };
-      if (audioBuffer) play(audioBuffer);
-      else void audioDecoding.then(play);
+      if (audioBuffer && audioContext.state === "running") play(audioBuffer);
+      else
+        void Promise.all([resumed, audioDecoding]).then(([, buffer]) =>
+          play(buffer),
+        );
     } catch {}
   }
   function differentColor(previous) {
@@ -178,6 +191,7 @@
     return choices[Math.floor(Math.random() * choices.length)];
   }
   function paintInteraction(button) {
+    if (button.matches(".info-button, a")) return;
     const color = differentColor(button.dataset.lastColor);
     button.dataset.lastColor = color.hex;
     if (button.id === "enter") {
@@ -193,7 +207,7 @@
       return;
     }
     if (button.classList.contains("vertical-action")) {
-      stripeOrder[button.id === "take-photo" ? 3 : 4] = color;
+      stripeOrder[Number(button.dataset.stripe)] = color;
       drawStripes();
       return;
     }
@@ -203,21 +217,33 @@
       button.style.color = "var(--button-ink)";
     }
   }
+  const interactionTarget = (event) =>
+    event.target.closest("button, a[href]:not([download])");
+  const sound = () => feedback({ vibrate: false, unlock: false });
   let heldButton = null;
   document.addEventListener("pointerover", (event) => {
-    const button = event.target.closest("button");
+    const button = interactionTarget(event);
     if (
       event.pointerType === "mouse" &&
       button &&
       !button.disabled &&
       !button.contains(event.relatedTarget)
-    )
+    ) {
       paintInteraction(button);
+      sound();
+    }
+  });
+  document.addEventListener("focusin", (event) => {
+    const button = interactionTarget(event);
+    if (button && !button.disabled) sound();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Tab") feedback({ vibrate: false });
   });
   document.addEventListener(
     "pointerdown",
     (event) => {
-      const button = event.target.closest("button");
+      const button = interactionTarget(event);
       if (!button || button.disabled || event.button !== 0) return;
       heldButton = {
         button,
@@ -262,7 +288,7 @@
   document.addEventListener(
     "click",
     (event) => {
-      const button = event.target.closest("button");
+      const button = interactionTarget(event);
       if (button?.dataset.dragged === "true") {
         delete button.dataset.dragged;
         event.preventDefault();
@@ -293,7 +319,7 @@
     else stripeOrder.push(stripeOrder.shift());
     pointer.steps = step;
     drawStripes();
-    feedback((step + 80) % 8);
+    feedback();
   });
   for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
     $("stripe-field").addEventListener(event, () => {
@@ -303,7 +329,13 @@
   function updateTimers() {
     clearInterval(homeTimer);
     clearInterval(previewTimer);
+    clearInterval(backTimer);
     if (document.hidden) return;
+    if (
+      ["info", "photo", "gallery", "record"].includes(state.screen) &&
+      !matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      backTimer = setInterval(rotateBackButtons, 1000);
     if (state.screen === "home")
       homeTimer = setInterval(() => {
         stripeOrder = shuffle(palette);
@@ -331,16 +363,20 @@
     }
   }
   function displayScreen(name) {
+    if (state.screen === "gallery")
+      state.galleryScrollTop = $("gallery-scroll").scrollTop;
     for (const id of screens) $(id).hidden = id !== name;
     state.screen = name;
     $(name).setAttribute("tabindex", "-1");
     $(name).focus({ preventScroll: true });
     if (name === "landing") randomizeLanding();
     if (name === "info") requestAnimationFrame(fitInfo);
+    rotateBackButtons();
     updateTimers();
   }
   addEventListener("resize", fitInfo);
   document.fonts.ready.then(fitInfo);
+  document.fonts.addEventListener("loadingdone", fitInfo);
   document.addEventListener("visibilitychange", updateTimers);
   matchMedia("(prefers-reduced-motion: reduce)").addEventListener(
     "change",
@@ -383,6 +419,7 @@
   async function route() {
     recordSerial++;
     gallerySerial++;
+    state.galleryLoading = false;
     if (state.busy && state.screen === "processing") {
       state.serial++;
       state.busy = false;
@@ -390,8 +427,12 @@
     }
     const hash = location.hash;
     if (hash === "#archive") {
+      const returning = state.screen === "record" && state.galleryLoaded;
       displayScreen("gallery");
-      await loadGallery();
+      if (returning) {
+        $("gallery-scroll").scrollTop = state.galleryScrollTop;
+        ensureGalleryFilled();
+      } else await loadGallery(true);
       return;
     }
     if (hash.startsWith("#result/")) {
@@ -428,6 +469,51 @@
     .forEach((button) =>
       button.addEventListener("click", () => navigate("#home")),
     );
+  document
+    .querySelectorAll('[data-action="archive"]')
+    .forEach((button) =>
+      button.addEventListener("click", () => navigate("#archive")),
+    );
+  let backArrows = [];
+  const backQueues = new WeakMap();
+  function rotateBackButtons() {
+    if (!backArrows.length) return;
+    document
+      .querySelectorAll(".screen:not([hidden]) .back-button")
+      .forEach((button) => {
+        let queue = backQueues.get(button);
+        if (!queue?.length) {
+          queue = shuffle(backArrows.map((_, i) => i));
+          if (queue.at(-1) === Number(button.dataset.arrow)) queue.reverse();
+          backQueues.set(button, queue);
+        }
+        const index = queue.pop(),
+          arrow = backArrows[index];
+        const svg = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "svg",
+        );
+        const path = document.createElementNS(svg.namespaceURI, "path");
+        svg.setAttribute("viewBox", arrow.viewBox);
+        svg.setAttribute("aria-hidden", "true");
+        path.setAttribute("d", arrow.path);
+        path.setAttribute("fill", "currentColor");
+        svg.append(path);
+        button.replaceChildren(svg);
+        button.dataset.arrow = String(index);
+        paintInteraction(button);
+      });
+  }
+  const backReady = fetch("assets/back-arrows.json")
+    .then((r) => {
+      if (!r.ok) throw Error("Back arrows unavailable");
+      return r.json();
+    })
+    .then((arrows) => {
+      backArrows = arrows;
+      rotateBackButtons();
+    })
+    .catch(() => {});
   let landingSVGReady = false;
   function randomizeLanding() {
     if (!landingSVGReady) return;
@@ -465,6 +551,7 @@
     const color = palette[Math.floor(Math.random() * palette.length)];
     if (infoSVG) {
       const doc = new DOMParser().parseFromString(infoSVG, "image/svg+xml");
+      doc.documentElement.setAttribute("preserveAspectRatio", "xMinYMid slice");
       const path = doc.querySelector("path");
       path.setAttribute("fill", color.hex);
       path.setAttribute("fill-opacity", String(color.opacity));
@@ -613,6 +700,7 @@
       frames[index].classList.remove("active");
       index = (index + 1) % 8;
       frames[index].classList.add("active");
+      if (!document.hidden) sound();
     }, 230);
   }
   function dateStamp(iso) {
@@ -765,8 +853,8 @@
         );
     }
     if (!archive.configured()) {
-      if (state.screen === "gallery" && state.galleryPage === 0)
-        void loadGallery();
+      if (state.screen === "gallery" && $("gallery-scroll").scrollTop < 40)
+        void loadGallery(true);
       return;
     }
     try {
@@ -778,8 +866,8 @@
         state.saveState.cloud = "saved";
         updateArchiveUI();
       }
-      if (state.screen === "gallery" && state.galleryPage === 0)
-        void loadGallery();
+      if (state.screen === "gallery" && $("gallery-scroll").scrollTop < 40)
+        void loadGallery(true);
     } catch (error) {
       if (state.record?.id === record.id) {
         state.saveState.cloud = "failed";
@@ -873,41 +961,58 @@
 
   let downloadInProgress = false;
   async function saveImage(record, kind) {
+    return saveImages(record, [kind]);
+  }
+  async function saveImages(record, kinds) {
     if (downloadInProgress || !record) return;
     downloadInProgress = true;
     clearError();
+    const controls = [$("save-arrows"), $("save-poster"), $("save-both")];
+    controls.forEach((button) => (button.disabled = true));
     try {
-      let blob = record[kind];
-      if (!blob) {
-        const response = await fetch(record.cloud[kind + "Url"]);
-        if (!response.ok) throw Error("Image download failed");
-        blob = await response.blob();
-      }
-      const filename = `snu-art-80-${kind}-${dateStamp(record.createdAt).replaceAll("/", "-")}.png`,
-        file = new File([blob], filename, { type: "image/png" });
-      // Call the share API immediately when the local blob is ready, preserving user activation on iOS.
+      // Fin already has both blobs: call native share before the first await to retain user activation.
+      const blobs = kinds.every((kind) => record[kind])
+        ? kinds.map((kind) => record[kind])
+        : await Promise.all(
+            kinds.map(async (kind) => {
+              if (record[kind]) return record[kind];
+              const response = await fetch(record.cloud[kind + "Url"]);
+              if (!response.ok) throw Error("Image download failed");
+              return response.blob();
+            }),
+          );
+      const files = kinds.map(
+        (kind, i) =>
+          new File(
+            [blobs[i]],
+            `snu-art-80-${kind}-${dateStamp(record.createdAt).replaceAll("/", "-")}.png`,
+            { type: "image/png" },
+          ),
+      );
       if (
-        navigator.canShare?.({ files: [file] }) &&
+        navigator.canShare?.({ files }) &&
         navigator.share &&
         /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
       ) {
         await navigator.share({
-          files: [file],
+          files,
           title: "나의 궤적 · Create Trajectories",
         });
         $("download-status").textContent =
           "공유 메뉴를 닫았습니다. 사진 앱에서 저장 여부를 확인해 주세요.";
       } else {
-        const url = URL.createObjectURL(blob),
-          link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.append(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        for (const file of files) {
+          const url = URL.createObjectURL(file),
+            link = document.createElement("a");
+          link.href = url;
+          link.download = file.name;
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
         $("download-status").textContent =
-          "이미지 다운로드를 요청했습니다. 결과 페이지에서 다른 이미지도 저장할 수 있어요.";
+          `이미지 ${files.length}장 다운로드를 요청했습니다.`;
       }
       if (state.screen === "finish") openCurrentRecord();
     } catch (error) {
@@ -916,6 +1021,7 @@
           "저장을 취소했습니다. 다시 선택할 수 있어요.";
       else showError("이미지를 저장하지 못했어요. 다시 시도해 주세요.");
     } finally {
+      controls.forEach((button) => (button.disabled = false));
       downloadInProgress = false;
     }
   }
@@ -929,31 +1035,63 @@
   $("save-poster").addEventListener("click", () =>
     saveImage(state.record, "poster"),
   );
+  $("save-both").addEventListener("click", () =>
+    saveImages(state.record, ["arrows", "poster"]),
+  );
   function openCurrentRecord() {
     $("download-dialog").close();
     navigate("#archive");
   }
   $("download-done").addEventListener("click", openCurrentRecord);
   $("open-record").addEventListener("click", openCurrentRecord);
-  async function loadGallery() {
-    const serial = ++gallerySerial;
+  const GALLERY_BATCH = 12;
+  function ensureGalleryFilled() {
+    if (
+      state.screen !== "gallery" ||
+      !state.galleryHasMore ||
+      state.galleryLoading
+    )
+      return;
+    const scroller = $("gallery-scroll");
+    if (
+      scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <
+      300
+    )
+      void loadGallery();
+  }
+  async function loadGallery(reset = false) {
+    if (!reset && (state.galleryLoading || !state.galleryHasMore)) return;
+    const serial = reset ? ++gallerySerial : gallerySerial;
+    if (reset) {
+      state.galleryOffset = 0;
+      state.galleryHasMore = true;
+      state.galleryLoaded = false;
+      state.galleryIds.clear();
+      $("gallery-grid").replaceChildren();
+      state.galleryUrls.forEach((url) => URL.revokeObjectURL(url));
+      state.galleryUrls = [];
+      $("gallery-scroll").scrollTop = 0;
+    }
+    state.galleryLoading = true;
+    $("gallery-more").hidden = true;
     $("gallery-status").textContent = "궤적을 불러오고 있어요…";
-    $("gallery-grid").replaceChildren();
-    $("gallery-prev").disabled = true;
-    $("gallery-next").disabled = true;
-    state.galleryUrls.forEach((url) => URL.revokeObjectURL(url));
-    state.galleryUrls = [];
     try {
-      let rows,
-        hasMore = false;
+      let rows, hasMore;
       if (archive.configured()) {
-        const result = await archive.onlineList(state.galleryPage * 6, 6);
+        const result = await archive.onlineList(
+          state.galleryOffset,
+          GALLERY_BATCH,
+        );
         rows = result.items;
         hasMore = result.hasMore;
       } else {
-        const local = await archive.localList(state.galleryPage * 6, 6);
-        hasMore = local.hasMore;
-        rows = local.items.map((record) => {
+        const result = await archive.localList(
+          state.galleryOffset,
+          GALLERY_BATCH,
+        );
+        if (serial !== gallerySerial || state.screen !== "gallery") return;
+        hasMore = result.hasMore;
+        rows = result.items.map((record) => {
           const photoUrl = URL.createObjectURL(record.photo),
             arrowsUrl = URL.createObjectURL(record.arrows);
           state.galleryUrls.push(photoUrl, arrowsUrl);
@@ -966,17 +1104,19 @@
         });
       }
       if (serial !== gallerySerial || state.screen !== "gallery") return;
-      $("gallery-status").textContent = rows.length
-        ? ""
-        : "아직 공개된 궤적이 없습니다.";
+      state.galleryOffset += rows.length;
+      state.galleryHasMore = hasMore;
+      state.galleryLoaded = true;
       for (const row of rows) {
+        // Offset reads can overlap if another participant publishes while this viewer scrolls.
+        if (state.galleryIds.has(row.id)) continue;
+        state.galleryIds.add(row.id);
         const card = document.createElement("button");
         card.className = "archive-card";
         card.dataset.recordId = row.id;
-        card.setAttribute("aria-pressed", "false");
         card.setAttribute(
           "aria-label",
-          dateStamp(row.createdAt) + " 궤적. 누르면 사진을 볼 수 있습니다.",
+          dateStamp(row.createdAt) + " 궤적. 사진과 궤적 함께 보기",
         );
         let photo;
         for (const [kind, src] of [
@@ -984,6 +1124,8 @@
           ["photo", row.photoUrl],
         ]) {
           const image = new Image();
+          image.loading = "lazy";
+          image.decoding = "async";
           if (kind === "arrows") image.src = src;
           else {
             photo = image;
@@ -1000,9 +1142,7 @@
         const revealPhoto = () => {
           if (!photo.hasAttribute("src")) {
             photo.onload = () => card.classList.add("is-photo-ready");
-            photo.onerror = () => {
-              photo.removeAttribute("src");
-            };
+            photo.onerror = () => photo.removeAttribute("src");
             photo.src = photo.dataset.src;
           }
         };
@@ -1020,37 +1160,48 @@
           );
         card.addEventListener("click", (event) => {
           if (event.detail > 0 && performance.now() - pressedAt > 350) return;
-          revealPhoto();
-          card.setAttribute(
-            "aria-pressed",
-            String(card.getAttribute("aria-pressed") !== "true"),
-          );
+          navigate("#result/" + row.id);
         });
         card.addEventListener("contextmenu", (event) => event.preventDefault());
         $("gallery-grid").append(card);
       }
-      $("gallery-page").textContent = String(state.galleryPage + 1);
-      $("gallery-prev").disabled = state.galleryPage === 0;
-      $("gallery-next").disabled = !hasMore;
+      $("gallery-status").textContent = state.galleryIds.size
+        ? ""
+        : "아직 공개된 궤적이 없습니다.";
+      $("gallery-more").hidden = !hasMore;
     } catch {
       if (serial !== gallerySerial) return;
       $("gallery-status").textContent =
-        "아카이브를 불러오지 못했어요. 잠시 후 다시 열어 주세요.";
+        "아카이브를 불러오지 못했어요. 다시 시도해 주세요.";
+      $("gallery-more").hidden = false;
+    } finally {
+      if (serial === gallerySerial) {
+        state.galleryLoading = false;
+        // Fill tall screens without relying on a scroll event or loading every record at once.
+        if ($("gallery-status").textContent === "")
+          requestAnimationFrame(ensureGalleryFilled);
+      }
     }
   }
-  $("gallery-prev").addEventListener("click", () => {
-    if (state.galleryPage > 0) {
-      state.galleryPage--;
-      void loadGallery();
-    }
+  $("gallery-scroll").addEventListener("scroll", ensureGalleryFilled, {
+    passive: true,
   });
-  $("gallery-next").addEventListener("click", () => {
-    state.galleryPage++;
-    void loadGallery();
-  });
+  let lastScrollSound = 0;
+  for (const type of ["wheel", "touchmove"])
+    $("gallery-scroll").addEventListener(
+      type,
+      () => {
+        if (performance.now() - lastScrollSound > 180) {
+          lastScrollSound = performance.now();
+          sound();
+        }
+      },
+      { passive: true },
+    );
+  $("gallery-more").addEventListener("click", () => loadGallery());
   function recordDescription(record) {
     if (record.cloud)
-      return `${dateStamp(record.createdAt)}\n사진에서 출발한 나의 궤적. 이 링크로 언제든 다시 볼 수 있어요.`;
+      return `${dateStamp(record.createdAt)}\n사진과 궤적을 함께 볼 수 있어요. 이 링크로 다시 볼 수 있습니다.`;
     if (state.record?.id === record.id && state.saveState.cloud === "pending")
       return `${dateStamp(record.createdAt)}\n온라인 저장 중입니다. 이 페이지를 잠시 열어 두세요.`;
     if (state.record?.id === record.id && !state.saveState.local)
@@ -1063,7 +1214,7 @@
     $("record-images").hidden = true;
     $("share-record").hidden = true;
     $("retry-cloud").hidden = true;
-    $("record-description").textContent = "나의 궤적을 불러오고 있어요…";
+    $("record-description").textContent = "궤적을 불러오고 있어요…";
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         id,
@@ -1147,6 +1298,7 @@
   });
   addEventListener("hashchange", route);
   randomizeHome();
+  void backReady;
   void infoReady;
   void landingReady;
   void route();
