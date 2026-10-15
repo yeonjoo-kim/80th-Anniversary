@@ -16,7 +16,7 @@ def path(arrow, color='currentColor', opacity=1):
 
 def markup(arrow, color, opacity):
     x, y = arrow['origin']
-    return f'<g data-arrow-source="{arrow["number"]}" transform="translate(62 407) scale(.64) translate({-x} {-y})">{path(arrow, color, opacity)}</g>'
+    return f'<g data-arrow-source="{arrow["number"]}" transform="translate(62 382) scale(.6) translate({-x} {-y})">{path(arrow, color, opacity)}</g>'
 
 def main():
     arrows = []
@@ -49,7 +49,7 @@ def main():
         # Natural 4:5 artwork stays proportional at every viewport size.
         angle = (frame - 3.5) * 5
         (ROOT / f'process-{frame+1}.svg').write_text(
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 140 402 502.5"><rect x="0" y="140" width="402" height="502.5" fill="#EEEEEF"/><g transform="rotate({angle} 150 407)">{content}</g></svg>\n')
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 140 402 502.5"><rect x="0" y="140" width="402" height="502.5" fill="#EEEEEF"/><g transform="rotate({angle} 143 382)">{content}</g></svg>\n')
 
 if __name__ == '__main__':
     main()
