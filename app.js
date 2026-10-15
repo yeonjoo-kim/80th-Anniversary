@@ -1161,11 +1161,11 @@
               return response.blob();
             }),
           );
-      const files = kinds.map(
-        (kind, i) =>
+      const files = blobs.map(
+        (blob, i) =>
           new File(
-            [blobs[i]],
-            `snu-art-80-${kind}-${dateStamp(record.createdAt).replaceAll("/", "-")}.png`,
+            [blob],
+            `80th Anniv. My Trajectories${i ? " (2)" : ""}.png`,
             { type: "image/png" },
           ),
       );
