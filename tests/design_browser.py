@@ -1,4 +1,4 @@
-"""Revision 4: real output geometry, desktop layout and audible source data.
+"""Current design: output geometry, desktop/mobile layout and audible source data.
 No production uploads; browser storage and Supabase responses stay local.
 """
 from array import array
@@ -20,13 +20,10 @@ for shape in SHAPES:
     original = ET.parse(ROOT / f'assets/arrows/arrow-{shape["number"]}.svg').getroot().find('s:path', NS)
     assert shape['path'] == original.get('d')
     assert shape['transform'] == original.get('transform', '')
+import hashlib
+PROCESS_HASHES = {'1': '88ca3b93413ff0e608a117e24e5a4823b00e2ee45dfd24b95553634d64365ec6', '2': '9e9150f671bae75fb85dff72409dd5724e36dfd4814d67d12d53b54cb9f395b5', '3': '4173c43b67d7bad856e4358ae51af70d52da8244b61be8008372cc4e1f625f82', '4': 'fef7f3b6b23a94cd09fe9b3a74334cb15993ac8d6ff87898700a16503471b403', '5': '55a0e037f6ca5ab43e0c38f9ddcce7a39f745c120b3ef62d6f34b15a9fd032fb', '6': 'c6ec3acb44b1d3cbd0f707a965827eba4ae2171d4bf7ea9dddcb5236404cb4a2', '7': 'f2e6c060f9c180ff9e64bf4c9eb67f1849d65c9afa68e658eef461b675d4b9d0', '8': '09c8b2d3c7956cfcc6574df8dc5a49bc3f61a3bcf6335929eda6bdf0bf0cf5d4'}
 for i in range(1, 9):
-    frame = ET.parse(ROOT / f'assets/process-{i}.svg').getroot()
-    groups = frame.findall('.//s:g[@data-arrow-source]', NS)
-    assert sorted(int(g.get('data-arrow-source')) for g in groups) == list(range(1, 9))
-    assert frame.find('s:g', NS).get('transform').startswith('rotate(')
-    for group in groups:
-        assert group.find('s:path', NS).get('d') == SHAPES[int(group.get('data-arrow-source')) - 1]['path']
+    assert hashlib.sha256((ROOT / f'assets/process-{i}.svg').read_bytes()).hexdigest() == PROCESS_HASHES[str(i)]
     with wave.open(str(ROOT / f'assets/audio/tap-{i}.wav')) as source:
         samples = array('h', source.readframes(source.getnframes()))
         rms = math.sqrt(sum(v*v for v in samples) / len(samples)) / 32768
@@ -48,7 +45,7 @@ def visible(page, selectors, width, height):
     for selector in selectors:
         r = geometry(page, selector)
         assert r['x'] >= -1 and r['y'] >= -1 and r['right'] <= width+1 and r['bottom'] <= height+1, (selector, width, height, r)
-        assert page.locator(selector).evaluate('e=>e.scrollWidth<=e.clientWidth+1&&e.scrollHeight<=e.clientHeight+1'), (selector, width, height)
+        assert page.locator(selector).evaluate('e=>e.scrollWidth<=e.clientWidth+1&&(e.id==="gallery-scroll"||e.scrollHeight<=e.clientHeight+1)'), (selector, width, height)
 
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'])
@@ -84,7 +81,7 @@ with sync_playwright() as p:
         page.set_viewport_size({'width':width,'height':height})
         page.evaluate('location.hash="#home"');page.locator('#home').wait_for(state='visible')
         title = geometry(page, '#home-title');title_sizes.append(title['font'])
-        visible(page, ['#home-title','#home .info-button','#take-photo','#choose-photo','#home-archive','.logo-bar'], width,height)
+        visible(page, ['#home-title','#home .info-button','#take-photo','#choose-photo','#home-archive','#take-photo span','#choose-photo span','#home-archive span','.logo-bar'], width,height)
         logo=geometry(page,'.logo-bar');assert abs(logo['x']-title['x'])<1
         page.locator('#home .info-button').click();page.locator('#info').wait_for(state='visible');page.wait_for_timeout(70)
         visible(page, ['.info-copy','#close-info'], width,height)
@@ -95,10 +92,16 @@ with sync_playwright() as p:
         page.evaluate('location.hash="#photo"');page.locator('#photo').wait_for(state='visible')
         visible(page, ['#photo-preview','#create','#photo .back-button'], width,height)
         create=geometry(page,'#create')
-        assert create['x']>width*.7 and abs(create['y']-title['y'])<1
+        assert create['x']>width*.7
+        back=geometry(page,'#photo .back-button')
+        image=geometry(page,'#photo-preview')
+        assert abs(image['x']+image['width']/2-width/2)<1 and abs(image['y']-back['y'])<1
         assert page.locator('.photo-decoration:visible').count()==3
         page.evaluate('location.hash="#finish"');page.locator('#finish').wait_for(state='visible')
-        visible(page, ['.finished-art','.finish-actions','#finish .info-button'], width,height)
+        visible(page, ['.finished-art','.finish-actions'], width,height)
+        assert page.locator('#finish .info-button').count()==0
+        art=geometry(page,'#result-preview')
+        assert abs(art['x']+art['width']/2-width/2)<1 and abs(art['y']-image['y'])<1
         controls=[geometry(page,s) for s in ['#download','#restart','#open-record']]
         for button in controls:
             assert abs(button['x']-create['x'])<1 and abs(button['width']-create['width'])<1 and abs(button['height']-create['height'])<1, (create,controls)
@@ -106,30 +109,34 @@ with sync_playwright() as p:
         assert controls[0]['bottom']<controls[1]['y']<controls[1]['bottom']<controls[2]['y']
         page.evaluate('location.hash="#archive"');page.locator('.archive-card').first.wait_for()
         gallery_title=geometry(page,'#gallery-title')
-        for key in ['x','y','font']:assert abs(gallery_title[key]-title[key])<1,(key,gallery_title,title)
+        assert abs(gallery_title['x']-title['x'])<1 and gallery_title['font']==28
+        gallery_back=geometry(page,'#gallery .back-button')
+        assert abs(gallery_back['x']-back['x'])<1 and abs(gallery_back['y']-back['y'])<1
         visible(page, ['.gallery-header','#gallery-scroll'],width,height)
         page.locator('.archive-card').first.click();page.locator('#record-images').wait_for(state='visible')
         detail_title=geometry(page,'#record-title')
-        for key in ['x','y','font']:assert abs(detail_title[key]-title[key])<1,(key,detail_title,title)
+        assert abs(detail_title['x']-title['x'])<1 and detail_title['font']==28
+        record_back=geometry(page,'#record .back-button')
+        assert abs(record_back['x']-back['x'])<1 and abs(record_back['y']-back['y'])<1
         visible(page, ['.record-header','#record-images','.record-navigation'],width,height)
-    assert title_sizes[5]>title_sizes[3]>title_sizes[0]
+    assert all(size==28 for size in title_sizes)
     for width,height in [(320,480),(390,844),(844,390)]:
         page.set_viewport_size({'width':width,'height':height})
         page.evaluate('location.hash="#home"');page.locator('#home').wait_for(state='visible')
         title=geometry(page,'#home-title')
         page.evaluate('location.hash="#archive"');page.locator('.archive-card').first.wait_for()
         archive_title=geometry(page,'#gallery-title')
-        for key in ['x','y','font']:assert abs(archive_title[key]-title[key])<1,(key,archive_title,title)
+        for key in ['x','font']:assert abs(archive_title[key]-title[key])<1,(key,archive_title,title)
         visible(page,['.gallery-header','#gallery-scroll'],width,height)
         page.locator('.archive-card').first.click();page.locator('#record-images').wait_for(state='visible')
         record_title=geometry(page,'#record-title')
-        for key in ['x','y','font']:assert abs(record_title[key]-title[key])<1,(key,record_title,title)
+        for key in ['x','font']:assert abs(record_title[key]-title[key])<1,(key,record_title,title)
         visible(page,['.record-header','#record-images','.record-navigation'],width,height)
     page.set_viewport_size({'width':1440,'height':900});page.emulate_media(reduced_motion='no-preference')
     page.evaluate('location.hash="#photo"');page.locator('#photo').wait_for(state='visible')
     for arrow in page.locator('.photo-decoration').all():
         motion=arrow.evaluate('''e=>{const a=e.getAnimations()[0],duration=a.effect.getTiming().duration;const samples=[0,.5,1].map(t=>{a.pause();a.currentTime=t*duration;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};});return{duration,xRange:Math.max(...samples.map(s=>s.x))-Math.min(...samples.map(s=>s.x)),yRange:Math.max(...samples.map(s=>s.y))-Math.min(...samples.map(s=>s.y))};}''')
-        assert motion['duration']<10800 and motion['xRange']>720 and motion['yRange']>270,motion
+        assert motion['duration']>=14000 and motion['xRange']>720 and motion['yRange']>270,motion
     assert not errors,errors
     browser.close()
-print('PASS: 7 desktop viewports, matching titles/margins/action positions, 3 background arrows, exact supplied output paths, stamp clearance, favicon, normalized cues and silent sprite guards.')
+print('PASS: 7 desktop viewports, fixed titles, matched Back buttons and centered artwork, 3 slower background arrows, exact supplied output paths, stamp clearance, favicon, normalized cues and silent sprite guards.')

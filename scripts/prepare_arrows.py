@@ -1,6 +1,6 @@
 """Build shared arrow data and decorations from the supplied, unmodified paths.
 Arrow 3 reflects Arrow 4 vertically, as approved by the designer.
-Landing keeps its separately supplied, fixed overlapping composition.
+Landing and Processing keep their separately supplied compositions.
 """
 import json
 from pathlib import Path
@@ -8,15 +8,9 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1] / 'assets'
 SVG = '{http://www.w3.org/2000/svg}'
-PALETTE = [('#0099FF', .5), ('#FF0095', .5), ('#C800FF', .5), ('#508D47', .7),
-           ('#B8A391', 1), ('#C6C7C9', .7), ('#FAC119', 1), ('#753245', .7)]
 
 def path(arrow, color='currentColor', opacity=1):
     return f'<path d="{arrow["path"]}" transform="{arrow["transform"]}" fill="{color}" fill-opacity="{opacity}"/>'
-
-def markup(arrow, color, opacity):
-    x, y = arrow['origin']
-    return f'<g data-arrow-source="{arrow["number"]}" transform="translate(62 382) scale(.6) translate({-x} {-y})">{path(arrow, color, opacity)}</g>'
 
 def main():
     arrows = []
@@ -43,13 +37,6 @@ def main():
     # Enlarged northwest arrow, cropped as in the supplied Info composition.
     (ROOT / 'info-arrow.svg').write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 402 874"><g transform="translate(-16 -30) scale(13)">{path(arrows[3],"#0099FF",.5)}</g></svg>\n')
-    ordered = sorted(arrows, key=lambda arrow: arrow['direction'])
-    for frame in range(8):
-        content = ''.join(markup(arrow, *PALETTE[(i+frame) % 8]) for i, arrow in enumerate(ordered))
-        # Natural 4:5 artwork stays proportional at every viewport size.
-        angle = (frame - 3.5) * 5
-        (ROOT / f'process-{frame+1}.svg').write_text(
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 140 402 502.5"><rect x="0" y="140" width="402" height="502.5" fill="#EEEEEF"/><g transform="rotate({angle} 143 382)">{content}</g></svg>\n')
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-revision="5">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -25,7 +25,7 @@
       sizes="180x180"
       href="assets/apple-touch-icon.png"
     />
-    <link rel="stylesheet" href="styles.css?v=4" />
+    <link rel="stylesheet" href="styles.css?v=5" />
     <link
       rel="preload"
       as="font"
@@ -43,7 +43,7 @@
     <script src="supabase-config.js" defer></script>
     <script src="core.js" defer></script>
     <script src="archive.js" defer></script>
-    <script src="app.js?v=4" defer></script>
+    <script src="app.js?v=5" defer></script>
   </head>
   <body>
     <main id="experience">
@@ -177,7 +177,6 @@
         </p>
       </section>
       <section id="finish" class="screen" hidden aria-label="완성된 궤적">
-        <button class="info-button" data-action="info" lang="en">INFO</button>
         <div class="finished-art">
           <img id="result-preview" alt="사진에서 생성한 궤적과 날짜" />
         </div>
@@ -324,11 +323,31 @@
           </figure>
         </div>
         <nav class="record-navigation" aria-label="게시물 이동">
-          <button id="record-prev" class="text-button" disabled>
-            ← 이전 게시물
+          <button
+            id="record-prev"
+            class="arrow-button post-arrow"
+            aria-label="이전 게시물"
+            disabled
+          >
+            <svg viewBox="0 0 142.56 270.11" aria-hidden="true">
+              <path
+                d="M0,66.02V5.67C0,2.54,2.54,0,5.67,0h60.35c3.13,0,5.67,2.54,5.67,5.67v3.66c0,3.13-2.54,5.67-5.67,5.67h-26.72c-5.05,0-7.58,6.11-4.01,9.68l105.61,105.61c1.06,1.06,1.66,2.51,1.66,4.01v130.15c0,3.13-2.54,5.67-5.67,5.67H5.67c-3.13,0-5.67-2.54-5.67-5.67v-3.66c0-3.13,2.54-5.67,5.67-5.67h116.22c3.13,0,5.67-2.54,5.67-5.67v-108.94c0-1.5-.6-2.95-1.66-4.01L24.68,35.28c-3.57-3.57-9.68-1.04-9.68,4.01v26.74c0,3.13-2.54,5.67-5.67,5.67h-3.66C2.54,71.69,0,69.15,0,66.02Z"
+                fill="currentColor"
+              />
+            </svg>
           </button>
-          <button id="record-next" class="text-button" disabled>
-            다음 게시물 →
+          <button
+            id="record-next"
+            class="arrow-button post-arrow"
+            aria-label="다음 게시물"
+            disabled
+          >
+            <svg viewBox="0 0 270.06 270.06" aria-hidden="true">
+              <path
+                d="M198.37,5.67v3.66c0,3.13,2.54,5.67,5.67,5.67h26.73c5.05,0,7.58,6.11,4.01,9.68l-105.55,105.55c-1.06,1.06-1.66,2.51-1.66,4.01v115.15c0,3.13-2.54,5.67-5.67,5.67H5.67c-3.13,0-5.67,2.54-5.67,5.67v3.66c0,3.13,2.54,5.67,5.67,5.67h131.22c3.13,0,5.67-2.54,5.67-5.67v-123.94c0-1.5.6-2.95,1.66-4.01l101.16-101.16c3.57-3.57,9.68-1.04,9.68,4.01v26.73c0,3.13,2.54,5.67,5.67,5.67h3.66c3.13,0,5.67-2.54,5.67-5.67V5.67c0-3.13-2.54-5.67-5.67-5.67h-60.35c-3.13,0-5.67,2.54-5.67,5.67Z"
+                fill="currentColor"
+              />
+            </svg>
           </button>
         </nav>
         <button id="retry-cloud" class="text-button" hidden>

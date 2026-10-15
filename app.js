@@ -104,9 +104,33 @@
     document
       .querySelectorAll(".color-button")
       .forEach((button, i) => colorButton(button, colors[i % colors.length]));
-    document.querySelectorAll(".back-button").forEach(paintInteraction);
+    document
+      .querySelectorAll(".back-button, .arrow-button")
+      .forEach(paintInteraction);
+  }
+  function updatePageSurface() {
+    const home = state.screen === "home";
+    document.documentElement.style.setProperty(
+      "--page-surface",
+      home
+        ? "var(--home-surface, #EEEEEF)"
+        : ["gallery", "record"].includes(state.screen)
+          ? state.archiveBackground || "#EEEEEF"
+          : "#EEEEEF",
+    );
+    document.querySelector('meta[name="theme-color"]').content =
+      home && stripeOrder.length
+        ? cssColor(stripeOrder[0])
+        : ["gallery", "record"].includes(state.screen)
+          ? state.archiveBackground || "#EEEEEF"
+          : "#EEEEEF";
   }
   function drawStripes() {
+    document.documentElement.style.setProperty(
+      "--home-surface",
+      `linear-gradient(to right, ${stripeOrder.map((color, i) => `${cssColor(color)} ${i * 12.5}% ${(i + 1) * 12.5}%`).join(", ")})`,
+    );
+    updatePageSurface();
     $("stripe-field").replaceChildren(
       ...stripeOrder.map((color) => {
         const stripe = document.createElement("div");
@@ -139,79 +163,100 @@
     [1.8, 0.085],
     [2.1, 0.085],
   ];
-  let mediaBackend =
+  const isIOS =
     /iP(hone|ad|od)/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
-    !(window.AudioContext || window.webkitAudioContext);
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let mediaBackend = !(window.AudioContext || window.webkitAudioContext);
   let mediaAudio,
     mediaActivated = false,
-    mediaTimer,
-    mediaSerial = 0,
-    mediaBlobURL;
-  const feedbackAudioURL = "assets/audio/feedback-sprite.wav";
-  if (mediaBackend) {
-    // Keep one source loaded. Replacing src on every short tap makes Safari reload it.
-    ensureMediaAudio();
-  }
-  const audioBytes = fetch(feedbackAudioURL)
+    sessionAudio,
+    sessionPending;
+  const audioBytes = fetch("assets/audio/feedback-sprite.wav")
     .then((r) => (r.ok ? r.arrayBuffer() : null))
-    .then((bytes) => {
-      if (bytes && mediaBackend) {
-        // Fully buffered local media supports seeking even when a host lacks byte ranges.
-        mediaBlobURL = URL.createObjectURL(
-          new Blob([bytes], { type: "audio/wav" }),
-        );
-        if (!mediaSerial) ensureMediaAudio().src = mediaBlobURL;
-      }
-      return bytes;
-    })
     .catch(() => null);
   function playbackSession() {
     try {
       if (navigator.audioSession) navigator.audioSession.type = "playback";
     } catch {}
   }
-  function ensureMediaAudio() {
+  function activateSession() {
     playbackSession();
+    if (!isIOS) return;
+    if (!sessionAudio) {
+      // A continuous, silent media session gives iOS Web Audio the media output route.
+      // Audible clicks are rendered by AudioBufferSourceNode, never stopped by a JS timer.
+      sessionAudio = new Audio("assets/audio/session-silence.m4a");
+      sessionAudio.loop = true;
+      sessionAudio.preload = "auto";
+      sessionAudio.hidden = true;
+      sessionAudio.muted = false;
+      sessionAudio.volume = 1;
+      sessionAudio.dataset.feedback = "session";
+      sessionAudio.setAttribute("playsinline", "");
+      sessionAudio.setAttribute("webkit-playsinline", "");
+      sessionAudio.setAttribute("disableRemotePlayback", "");
+      sessionAudio.setAttribute("x-webkit-airplay", "deny");
+      document.body.append(sessionAudio);
+    }
+    if (sessionAudio.paused && !sessionPending) {
+      sessionPending = sessionAudio.play();
+      sessionPending?.then(
+        () => {
+          sessionPending = null;
+        },
+        () => {
+          sessionPending = null;
+        },
+      );
+    }
+  }
+  function ensureMediaAudio() {
     if (!mediaAudio) {
-      mediaAudio = new Audio(feedbackAudioURL);
+      mediaAudio = new Audio();
       mediaAudio.preload = "auto";
       mediaAudio.hidden = true;
-      mediaAudio.dataset.feedback = "true";
+      mediaAudio.dataset.feedback = "fallback";
       mediaAudio.setAttribute("playsinline", "");
-      mediaAudio.setAttribute("webkit-playsinline", "");
       document.body.append(mediaAudio);
     }
     return mediaAudio;
   }
   function primeAudio() {
-    playbackSession();
+    activateSession();
     if (mediaBackend) {
-      const element = ensureMediaAudio();
-      // A slow first visit can finish buffering after the first tap. Switch once,
-      // in the next trusted gesture, then retain this source for subsequent taps.
-      if (mediaBlobURL && element.src !== mediaBlobURL)
-        element.src = mediaBlobURL;
+      ensureMediaAudio();
       return Promise.resolve();
     }
     try {
       const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      let freshContext = false;
       if (!audioContext || audioContext.state === "closed") {
         audioContext = new AudioCtor({ latencyHint: "interactive" });
+        freshContext = true;
         if (!audioBuffer) audioDecoding = null;
       }
-      // iOS can report "interrupted" after the camera/picker or another app, as well as "suspended".
-      const resumed =
-        audioContext.state !== "running"
-          ? audioContext.resume()
-          : Promise.resolve();
+      let resumed = Promise.resolve();
+      if (freshContext || audioContext.state !== "running") {
+        // Start a sample and call resume synchronously in the trusted touch/click.
+        const unlock = audioContext.createBufferSource();
+        unlock.buffer = audioContext.createBuffer(
+          1,
+          1,
+          audioContext.sampleRate,
+        );
+        unlock.connect(audioContext.destination);
+        unlock.start(0);
+        resumed = audioContext.resume().catch(() => {
+          mediaBackend = true;
+        });
+      }
       audioDecoding ||= audioBytes
         .then((bytes) =>
           bytes ? audioContext.decodeAudioData(bytes.slice(0)) : null,
         )
         .then((buffer) => (audioBuffer = buffer))
         .catch(() => null);
-      return resumed.catch(() => {});
+      return resumed;
     } catch {
       mediaBackend = true;
       ensureMediaAudio();
@@ -220,36 +265,32 @@
   }
   function playMedia(index) {
     const element = ensureMediaAudio();
-    const serial = ++mediaSerial;
-    const [offset, duration] = soundCues[element.readyState ? index : 0];
-    clearTimeout(mediaTimer);
-    element.pause();
-    try {
-      element.currentTime = offset;
-    } catch {}
+    const source = new URL(
+      `assets/audio/tap-${index + 1}.m4a`,
+      document.baseURI,
+    ).href;
+    if (element.src !== source) element.src = source;
+    else {
+      element.pause();
+      try {
+        element.currentTime = 0;
+      } catch {}
+    }
     element.muted = false;
     element.volume = 1;
-    const attempt = element.play();
-    attempt
-      ?.then(() => {
-        if (serial !== mediaSerial) return;
+    // The encoded clip has a silent tail and ends naturally. Do not truncate the output queue.
+    element.play()?.then(
+      () => {
         mediaActivated = true;
-        // Each clip has a silence guard, so a delayed timer cannot play the next click.
-        mediaTimer = setTimeout(
-          () => {
-            if (serial === mediaSerial) element.pause();
-          },
-          (duration + 0.025) * 1000,
-        );
-      })
-      .catch(() => {
-        if (serial === mediaSerial) mediaActivated = false;
-      });
+      },
+      () => {
+        mediaActivated = false;
+      },
+    );
   }
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) return;
-    clearTimeout(mediaTimer);
-    mediaSerial++;
+    sessionAudio?.pause();
     mediaAudio?.pause();
   });
   function feedback({ vibrate = true, unlock = true } = {}) {
@@ -270,7 +311,7 @@
       return;
     }
     const play = (buffer) => {
-      if (!buffer) {
+      if (!buffer || mediaBackend) {
         mediaBackend = true;
         playMedia(index);
         return;
@@ -305,7 +346,7 @@
     if (button.matches(".info-button, a")) return;
     const color = differentColor(
       button.dataset.lastColor,
-      button.classList.contains("back-button") &&
+      button.matches(".back-button, .arrow-button") &&
         ["gallery", "record"].includes(state.screen)
         ? state.archiveBackground
         : null,
@@ -315,7 +356,7 @@
       randomizeLanding();
       return;
     }
-    if (button.classList.contains("back-button")) {
+    if (button.matches(".back-button, .arrow-button")) {
       button.style.color = `rgb(${color.hex
         .slice(1)
         .match(/../g)
@@ -469,6 +510,30 @@
       pointer = null;
     });
 
+  function fitRecordPhoto() {
+    const image = $("record-photo");
+    if (
+      state.screen !== "record" ||
+      !image.naturalWidth ||
+      image.closest("#record-images").hidden
+    )
+      return;
+    const portrait = image.naturalHeight > image.naturalWidth;
+    image.classList.toggle("is-portrait", portrait);
+    if (portrait) {
+      const frame = image.parentElement;
+      const width = Math.min(frame.clientWidth, frame.clientHeight * 0.8);
+      image.style.width = width + "px";
+      image.style.height = width * 1.25 + "px";
+    } else {
+      image.style.width = "100%";
+      image.style.height = "100%";
+    }
+  }
+  $("record-photo").addEventListener("load", fitRecordPhoto);
+  if (window.ResizeObserver)
+    new ResizeObserver(fitRecordPhoto).observe($("record-images"));
+  addEventListener("resize", fitRecordPhoto);
   function updateTimers() {
     clearInterval(homeTimer);
     clearInterval(previewTimer);
@@ -525,7 +590,12 @@
         ink({ ...color, opacity: 1 }),
       );
     }
+    updatePageSurface();
     if (name === "info") requestAnimationFrame(fitInfo);
+    if (name === "record")
+      document
+        .querySelectorAll("#record .arrow-button")
+        .forEach(paintInteraction);
     rotateBackButtons();
     updateTimers();
   }
@@ -678,7 +748,7 @@
         path.setAttribute("fill-opacity", colors[i].opacity);
       });
   }
-  const landingReady = fetch("assets/landing.svg")
+  const landingReady = fetch("assets/landing.svg?v=5")
     .then((r) => {
       if (!r.ok) throw Error();
       return r.text();
@@ -805,6 +875,10 @@
       if (state.photoUrl) URL.revokeObjectURL(state.photoUrl);
       state.photo = photo;
       state.photoUrl = URL.createObjectURL(photo);
+      $("photo-preview").style.setProperty(
+        "--photo-ratio",
+        String(c.width / c.height),
+      );
       $("photo-preview").src = state.photoUrl;
       randomizeButtons();
       navigate("#photo");
@@ -828,7 +902,7 @@
 
   for (let i = 1; i <= 8; i++) {
     const img = new Image();
-    img.src = `assets/process-${i}.svg`;
+    img.src = `assets/process-${i}.svg?v=5`;
     img.alt = "";
     $("process-frames").append(img);
   }
