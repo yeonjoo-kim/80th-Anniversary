@@ -111,8 +111,22 @@ def main():
                    data=f'Publish public feedback snapshot of {commit}\n')
     run('git', 'push', 'origin', f'{snapshot}:refs/heads/{BRANCH}')
     if source.get('branch') != BRANCH:
-        run('gh', 'api', '--method', 'PUT', f'repos/{REPO}/pages', '--input', '-',
-            data=json.dumps({'source': {'branch': BRANCH, 'path': '/'}}))
+        selection = subprocess.run(
+            ['gh', 'api', '--method', 'PUT', f'repos/{REPO}/pages', '--input', '-'],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            input=json.dumps({'source': {'branch': BRANCH, 'path': '/'}}))
+        if selection.returncode:
+            if 'HTTP 403' in selection.stderr:
+                print(json.dumps({
+                    'status': 'snapshot_uploaded_pages_selection_required',
+                    'public_url_pending_activation': URL,
+                    'snapshot_commit': snapshot,
+                    'settings_url': f'https://github.com/{REPO}/settings/pages',
+                    'action': f'Select Deploy from a branch, {BRANCH}, /(root), then Save',
+                    'reason': 'The connected integration cannot change Pages settings (HTTP 403)',
+                    'main_root_preserved': True, 'main_branch_changed': False}))
+                raise SystemExit(2)
+            raise SystemExit(selection.stderr.strip())
     print(json.dumps({'public_url': URL, 'code_commit': commit,
                       'snapshot_commit': snapshot, 'pages_branch': BRANCH,
                       'main_root_preserved': True, 'main_branch_changed': False}))
