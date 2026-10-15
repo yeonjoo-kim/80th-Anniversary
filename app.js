@@ -26,6 +26,8 @@
     recordUrls: [],
     previewUrls: [],
     viewedRecord: null,
+    recordNeighbors: { previous: null, next: null },
+    archiveBackground: null,
     galleryOffset: 0,
     galleryHasMore: true,
     galleryLoading: false,
@@ -37,7 +39,7 @@
   let stripeOrder = [],
     processTimer,
     audioContext,
-    lastFeedback = 0,
+    lastFeedback = -Infinity,
     homeTimer,
     previewTimer,
     backTimer,
@@ -137,62 +139,162 @@
     [1.758, 0.085],
     [2.295, 0.085],
   ];
+  let mediaBackend =
+    /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+    !(window.AudioContext || window.webkitAudioContext);
+  let mediaAudio,
+    mediaActivated = false;
+  const mediaPaths = soundCues.map(
+    (_, i) => new URL(`assets/audio/tap-${i + 1}.wav`, document.baseURI).href,
+  );
+  let readyMediaPaths = mediaPaths;
+  if (mediaBackend) {
+    // One persistent media element retains Safari's user-gesture permission between clips.
+    ensureMediaAudio();
+    void Promise.all(
+      mediaPaths.map(async (path) => {
+        try {
+          const response = await fetch(path);
+          return response.ok
+            ? URL.createObjectURL(await response.blob())
+            : path;
+        } catch {
+          return path;
+        }
+      }),
+    ).then((paths) => {
+      readyMediaPaths = paths;
+    });
+  }
   const audioBytes = fetch("assets/audio/revolver-spin.mp3")
     .then((r) => (r.ok ? r.arrayBuffer() : null))
     .catch(() => null);
-  function feedback({ vibrate = true, unlock = true } = {}) {
-    if (!unlock && audioContext?.state !== "running") return;
-    if (performance.now() - lastFeedback < 70) return;
-    lastFeedback = performance.now();
+  function playbackSession() {
     try {
-      if (vibrate) navigator.vibrate?.(18);
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
     } catch {}
+  }
+  function ensureMediaAudio() {
+    playbackSession();
+    if (!mediaAudio) {
+      mediaAudio = new Audio(mediaPaths[0]);
+      mediaAudio.preload = "auto";
+      mediaAudio.hidden = true;
+      mediaAudio.dataset.feedback = "true";
+      mediaAudio.setAttribute("playsinline", "");
+      mediaAudio.setAttribute("webkit-playsinline", "");
+      document.body.append(mediaAudio);
+    }
+    return mediaAudio;
+  }
+  function primeAudio() {
+    playbackSession();
+    if (mediaBackend) {
+      ensureMediaAudio();
+      return Promise.resolve();
+    }
     try {
       const AudioCtor = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtor) return;
-      audioContext ||= new AudioCtor();
+      if (!audioContext || audioContext.state === "closed") {
+        audioContext = new AudioCtor({ latencyHint: "interactive" });
+        if (!audioBuffer) audioDecoding = null;
+      }
+      // iOS can report "interrupted" after the camera/picker or another app, as well as "suspended".
       const resumed =
-        audioContext.state === "suspended" && unlock
-          ? audioContext.resume().catch(() => {})
+        audioContext.state !== "running"
+          ? audioContext.resume()
           : Promise.resolve();
       audioDecoding ||= audioBytes
         .then((bytes) =>
           bytes ? audioContext.decodeAudioData(bytes.slice(0)) : null,
         )
-        .then((buffer) => {
-          audioBuffer = buffer;
-          return buffer;
-        })
+        .then((buffer) => (audioBuffer = buffer))
         .catch(() => null);
-      const play = (buffer) => {
-        if (!buffer || audioContext.state !== "running") return;
-        const [offset, duration] = soundCues[nextSound++ % soundCues.length];
-        const source = audioContext.createBufferSource(),
-          gain = audioContext.createGain(),
-          now = audioContext.currentTime;
-        source.buffer = buffer;
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.8, now + 0.002);
-        gain.gain.setValueAtTime(0.8, now + duration - 0.01);
-        gain.gain.linearRampToValueAtTime(0, now + duration);
-        source.connect(gain);
-        gain.connect(audioContext.destination);
-        source.start(now, offset, duration);
-      };
-      if (audioBuffer && audioContext.state === "running") play(audioBuffer);
-      else
-        void Promise.all([resumed, audioDecoding]).then(([, buffer]) =>
-          play(buffer),
-        );
-    } catch {}
+      return resumed.catch(() => {});
+    } catch {
+      mediaBackend = true;
+      ensureMediaAudio();
+      return Promise.resolve();
+    }
   }
-  function differentColor(previous) {
-    const choices = palette.filter((color) => color.hex !== previous);
+  function playMedia(index) {
+    const element = ensureMediaAudio();
+    const source = readyMediaPaths[index];
+    if (element.src !== source) element.src = source;
+    else {
+      element.pause();
+      element.currentTime = 0;
+    }
+    element.muted = false;
+    element.volume = 1;
+    const attempt = element.play();
+    attempt
+      ?.then(() => {
+        mediaActivated = true;
+      })
+      .catch(() => {
+        mediaActivated = false;
+      });
+  }
+  function feedback({ vibrate = true, unlock = true } = {}) {
+    const resumed = unlock ? primeAudio() : Promise.resolve();
+    if (
+      !unlock &&
+      (mediaBackend ? !mediaActivated : audioContext?.state !== "running")
+    )
+      return;
+    if (performance.now() - lastFeedback < 70) return;
+    lastFeedback = performance.now();
+    try {
+      if (vibrate) navigator.vibrate?.(18);
+    } catch {}
+    const index = nextSound++ % soundCues.length;
+    if (mediaBackend) {
+      playMedia(index);
+      return;
+    }
+    const play = (buffer) => {
+      if (!buffer) {
+        mediaBackend = true;
+        playMedia(index);
+        return;
+      }
+      if (audioContext.state !== "running" || document.hidden) return;
+      const [offset, duration] = soundCues[index],
+        now = audioContext.currentTime;
+      const source = audioContext.createBufferSource(),
+        gain = audioContext.createGain();
+      source.buffer = buffer;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.8, now + 0.002);
+      gain.gain.setValueAtTime(0.8, now + duration - 0.01);
+      gain.gain.linearRampToValueAtTime(0, now + duration);
+      source.connect(gain);
+      gain.connect(audioContext.destination);
+      source.start(now, offset, duration);
+    };
+    if (audioBuffer && audioContext.state === "running") play(audioBuffer);
+    else
+      void Promise.all([resumed, audioDecoding]).then(([, buffer]) =>
+        play(buffer),
+      );
+  }
+  function differentColor(previous, excluded) {
+    const choices = palette.filter(
+      (color) => color.hex !== previous && color.hex !== excluded,
+    );
     return choices[Math.floor(Math.random() * choices.length)];
   }
   function paintInteraction(button) {
     if (button.matches(".info-button, a")) return;
-    const color = differentColor(button.dataset.lastColor);
+    const color = differentColor(
+      button.dataset.lastColor,
+      button.classList.contains("back-button") &&
+        ["gallery", "record"].includes(state.screen)
+        ? state.archiveBackground
+        : null,
+    );
     button.dataset.lastColor = color.hex;
     if (button.id === "enter") {
       randomizeLanding();
@@ -220,7 +322,9 @@
   const interactionTarget = (event) =>
     event.target.closest("button, a[href]:not([download])");
   const sound = () => feedback({ vibrate: false, unlock: false });
-  let heldButton = null;
+  let heldButton = null,
+    lastPointerType = "mouse",
+    touchSoundHandled = false;
   document.addEventListener("pointerover", (event) => {
     const button = interactionTarget(event);
     if (
@@ -254,8 +358,14 @@
         moved: false,
       };
       delete button.dataset.dragged;
+      lastPointerType = event.pointerType;
+      touchSoundHandled = false;
       paintInteraction(button);
-      feedback();
+      if (event.pointerType === "touch") {
+        try {
+          navigator.vibrate?.(18);
+        } catch {}
+      } else feedback();
     },
     true,
   );
@@ -295,12 +405,30 @@
         event.stopImmediatePropagation();
         return;
       }
-      if (button && event.detail === 0) {
+      if (button && (event.detail === 0 || lastPointerType === "touch")) {
         paintInteraction(button);
-        feedback();
+        if (!touchSoundHandled || event.detail === 0)
+          feedback({ vibrate: event.detail === 0 });
+        else if (mediaBackend && !mediaActivated && mediaAudio?.paused) {
+          lastFeedback = -Infinity;
+          feedback({ vibrate: false });
+        } else void primeAudio();
       }
     },
     true,
+  );
+
+  document.addEventListener(
+    "touchend",
+    (event) => {
+      if (interactionTarget(event) || event.target.closest("#stripe-field")) {
+        if (mediaBackend && !mediaActivated && mediaAudio?.paused)
+          lastFeedback = -Infinity;
+        feedback({ vibrate: false });
+        touchSoundHandled = true;
+      }
+    },
+    { capture: true, passive: true },
   );
 
   let pointer = null;
@@ -370,6 +498,18 @@
     $(name).setAttribute("tabindex", "-1");
     $(name).focus({ preventScroll: true });
     if (name === "landing") randomizeLanding();
+    if (["gallery", "record"].includes(name)) {
+      const color = differentColor(state.archiveBackground);
+      state.archiveBackground = color.hex;
+      document.documentElement.style.setProperty(
+        "--archive-background",
+        color.hex,
+      );
+      document.documentElement.style.setProperty(
+        "--archive-ink",
+        ink({ ...color, opacity: 1 }),
+      );
+    }
     if (name === "info") requestAnimationFrame(fitInfo);
     rotateBackButtons();
     updateTimers();
@@ -406,9 +546,6 @@
       state.screen === "record" &&
       state.viewedRecord?.id === state.record?.id
     ) {
-      $("record-description").textContent = recordDescription(
-        state.viewedRecord,
-      );
       $("share-record").hidden = !state.viewedRecord.cloud;
       $("retry-cloud").hidden =
         !archive.configured() ||
@@ -569,29 +706,17 @@
   );
   $("close-info").addEventListener("click", () => navigate(state.infoReturn));
   $("take-photo").addEventListener("click", () => $("camera-file").click());
-  // No browser API can force the iOS native picker to bypass its source menu.
-  // Prefer a supported image picker; retain a type=file fallback for mobile Safari.
-  $("choose-photo").addEventListener("click", async () => {
-    if (typeof window.showOpenFilePicker === "function") {
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          multiple: false,
-          types: [
-            {
-              description: "사진",
-              accept: {
-                "image/*": [".jpg", ".jpeg", ".png", ".webp", ".avif", ".heic"],
-              },
-            },
-          ],
-        });
-        await selectPhoto(await handle.getFile());
+  // Open the native photo chooser synchronously in the user's click gesture.
+  // Safari controls its own Photos/Camera/Files source menu; sites cannot select an item for it.
+  $("choose-photo").addEventListener("click", () => {
+    const input = $("library-file");
+    try {
+      if (typeof input.showPicker === "function") {
+        input.showPicker();
         return;
-      } catch (error) {
-        if (error.name === "AbortError") return;
       }
-    }
-    $("library-file").click();
+    } catch {}
+    input.click();
   });
 
   function loadImage(source) {
@@ -793,29 +918,55 @@
       })
       .then((text) => {
         const doc = new DOMParser().parseFromString(text, "image/svg+xml");
-        return doc.documentElement.innerHTML;
+        const svg = doc.documentElement;
+        const markup = svg.innerHTML;
+        svg.setAttribute(
+          "style",
+          "position:fixed;left:-10000px;top:0;width:1px;height:1px;visibility:hidden",
+        );
+        const mounted = document.importNode(svg, true);
+        document.body.append(mounted);
+        try {
+          const bounds = mounted.getBBox();
+          return {
+            markup,
+            centerX: bounds.x + bounds.width / 2,
+            centerY: bounds.y + bounds.height / 2,
+          };
+        } finally {
+          mounted.remove();
+        }
       })
       .catch((error) => {
         posterTypePromise = null;
         throw error;
       }));
   }
+  const EXPORT_WIDTH = 1200,
+    EXPORT_HEIGHT = 1500;
+  const EXPORT_FRAME = { x: 0, y: 140, width: 402, height: 502.5 };
   async function artifact(result, createdAt, photo, withType) {
-    const type = withType ? await posterType() : "";
+    const type = withType ? await posterType() : null;
     const thumbnail = withType
       ? `<image x="61" y="544" width="37" height="56" preserveAspectRatio="xMidYMid slice" href="${await dataURL(photo)}"/>`
       : "";
+    const typeLayer = type
+      ? `<g data-layer="poster-typography" transform="translate(${EXPORT_FRAME.width / 2 - type.centerX} ${EXPORT_FRAME.y + EXPORT_FRAME.height / 2 - type.centerY})">${type.markup}${thumbnail}</g>`
+      : "";
     await document.fonts.load('25px "Panchi Mono"');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1206" height="1560" viewBox="0 140 402 520"><rect x="0" y="140" width="402" height="520" fill="#EEEEEF"/>${arrowMarkup(result)}${type}${thumbnail}</svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${EXPORT_WIDTH}" height="${EXPORT_HEIGHT}" viewBox="0 140 402 502.5"><rect x="0" y="140" width="402" height="502.5" fill="#EEEEEF"/>${arrowMarkup(result)}${typeLayer}</svg>`;
     const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     try {
       const image = await loadImage(url),
-        c = canvas(1206, 1560);
+        c = canvas(EXPORT_WIDTH, EXPORT_HEIGHT);
       const ctx = c.getContext("2d");
-      ctx.drawImage(image, 0, 0, 1206, 1560);
+      ctx.drawImage(image, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
       ctx.save();
-      ctx.scale(3, 3);
-      ctx.translate(247, 594 - 140);
+      ctx.scale(
+        EXPORT_WIDTH / EXPORT_FRAME.width,
+        EXPORT_HEIGHT / EXPORT_FRAME.height,
+      );
+      ctx.translate(247, 594 - EXPORT_FRAME.y);
       ctx.rotate(-Math.PI / 6);
       ctx.font = '25px "Panchi Mono"';
       ctx.fillStyle = "#4400FF";
@@ -1199,18 +1350,40 @@
       { passive: true },
     );
   $("gallery-more").addEventListener("click", () => loadGallery());
-  function recordDescription(record) {
-    if (record.cloud)
-      return `${dateStamp(record.createdAt)}\n사진과 궤적을 함께 볼 수 있어요. 이 링크로 다시 볼 수 있습니다.`;
-    if (state.record?.id === record.id && state.saveState.cloud === "pending")
-      return `${dateStamp(record.createdAt)}\n온라인 저장 중입니다. 이 페이지를 잠시 열어 두세요.`;
-    if (state.record?.id === record.id && !state.saveState.local)
-      return `${dateStamp(record.createdAt)}\n이 탭에서만 볼 수 있는 기록입니다. 이미지 다운로드로 보관해 주세요.`;
-    return `${dateStamp(record.createdAt)}\n이 브라우저에 보관된 기록입니다. 다른 기기에서는 열리지 않으며, 브라우저 데이터를 지우면 삭제됩니다.`;
+  async function updateRecordNeighbors(record, serial) {
+    try {
+      const ids = [...state.galleryIds],
+        index = ids.indexOf(record.id);
+      const neighbors =
+        index >= 0 && (index + 1 < ids.length || !state.galleryHasMore)
+          ? { previous: ids[index - 1] || null, next: ids[index + 1] || null }
+          : await (archive.configured() && record.cloud
+              ? archive.onlineNeighbors(record)
+              : archive.localNeighbors(record.id));
+      if (serial !== recordSerial || state.screen !== "record") return;
+      state.recordNeighbors = neighbors;
+      $("record-prev").disabled = !neighbors.previous;
+      $("record-next").disabled = !neighbors.next;
+    } catch {
+      if (serial === recordSerial)
+        $("record-description").textContent =
+          "게시물 이동을 불러오지 못했습니다.";
+    }
   }
+  $("record-prev").addEventListener("click", () => {
+    if (state.recordNeighbors.previous)
+      navigate("#result/" + state.recordNeighbors.previous);
+  });
+  $("record-next").addEventListener("click", () => {
+    if (state.recordNeighbors.next)
+      navigate("#result/" + state.recordNeighbors.next);
+  });
   async function loadRecord(id) {
     const serial = recordSerial;
     state.viewedRecord = null;
+    state.recordNeighbors = { previous: null, next: null };
+    $("record-prev").disabled = true;
+    $("record-next").disabled = true;
     $("record-images").hidden = true;
     $("share-record").hidden = true;
     $("retry-cloud").hidden = true;
@@ -1255,7 +1428,8 @@
       $(element).src = src;
     }
     $("record-images").hidden = false;
-    $("record-description").textContent = recordDescription(record);
+    $("record-description").textContent = "";
+    void updateRecordNeighbors(record, serial);
     $("share-record").hidden = !record.cloud;
     $("retry-cloud").hidden =
       !archive.configured() ||
@@ -1263,12 +1437,6 @@
       state.saveState.cloud === "pending";
     randomizeButtons();
   }
-  $("record-download-arrows").addEventListener("click", () =>
-    saveImage(state.viewedRecord, "arrows"),
-  );
-  $("record-download-poster").addEventListener("click", () =>
-    saveImage(state.viewedRecord, "poster"),
-  );
   $("share-record").addEventListener("click", async () => {
     if (!state.viewedRecord?.cloud) return;
     try {

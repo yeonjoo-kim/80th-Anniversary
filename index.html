@@ -24,13 +24,6 @@
     <link
       rel="preload"
       as="font"
-      href="assets/fonts/KoPubWorldBatang-Light.woff2"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      as="font"
       href="assets/fonts/PlayfairDisplay-Italic.ttf"
       type="font/ttf"
       crossorigin
@@ -305,26 +298,23 @@
             링크 복사 ↗
           </button>
         </header>
-        <p id="record-description" class="record-description" role="status"></p>
+        <p id="record-description" class="sr-only" role="status"></p>
         <div id="record-images" hidden>
           <figure>
             <img id="record-photo" alt="궤적의 바탕이 된 사진" />
-            <figcaption>사진 <i lang="en">Photograph</i></figcaption>
           </figure>
           <figure>
             <img id="record-arrows" alt="사진에서 만들어진 궤적과 생성 날짜" />
-            <figcaption>
-              궤적과 날짜 <i lang="en">Trajectory & date</i>
-            </figcaption>
           </figure>
-          <div class="record-downloads">
-            <button id="record-download-arrows" class="color-button">
-              <span>궤적 저장</span><i lang="en">Save trajectory</i></button
-            ><button id="record-download-poster" class="color-button">
-              <span>포스터 저장</span><i lang="en">Save poster</i>
-            </button>
-          </div>
         </div>
+        <nav class="record-navigation" aria-label="게시물 이동">
+          <button id="record-prev" class="text-button" disabled>
+            ← 이전 게시물
+          </button>
+          <button id="record-next" class="text-button" disabled>
+            다음 게시물 →
+          </button>
+        </nav>
         <button id="retry-cloud" class="text-button" hidden>
           온라인 저장 다시 시도 ↗
         </button>

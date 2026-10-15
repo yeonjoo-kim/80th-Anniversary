@@ -10,6 +10,7 @@ VIEWPORTS=[(320,480),(320,568),(360,640),(375,667),(390,844),(412,915),(430,932)
 INSTRUMENT='''window.feedbackCalls=[];window.dateCalls=[];window.soundCalls=[];
 Object.defineProperty(navigator,'vibrate',{configurable:true,value:ms=>{feedbackCalls.push(ms);return true;}});
 const text=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(value,...args){dateCalls.push({font:this.font,text:value});return text.call(this,value,...args);};
+window.exportSVGs=[];const objectURL=URL.createObjectURL;URL.createObjectURL=function(blob){if(blob.type==='image/svg+xml')void blob.text().then(text=>exportSVGs.push(text));return objectURL.call(this,blob);};
 const start=AudioBufferSourceNode.prototype.start;AudioBufferSourceNode.prototype.start=function(...args){soundCalls.push(args);return start.apply(this,args);};'''
 def no_overflow(page,selectors=()):
     state=page.evaluate('''selectors=>({w:innerWidth,h:innerHeight,document:[document.documentElement.scrollWidth,document.documentElement.scrollHeight],elements:selectors.map(selector=>{const e=document.querySelector(selector),r=e.getBoundingClientRect();return {selector,x:r.x,y:r.y,right:r.right,bottom:r.bottom,scroll:[e.scrollWidth,e.scrollHeight],client:[e.clientWidth,e.clientHeight]};})})''',list(selectors))
@@ -37,12 +38,15 @@ with sync_playwright() as p:
     assert page.locator('.landing-eyebrow i').evaluate('(e)=>getComputedStyle(e).fontStyle')=='normal'
     assert page.evaluate('feedbackCalls.length')==0
     assert page.locator('#landing-art .landing-arrow').count()==5
+    assert page.locator('#landing-art svg').get_attribute('preserveAspectRatio')=='xMidYMid meet'
+    assert page.locator('body').evaluate('(e)=>getComputedStyle(e).fontWeight')=='500'
     assert page.locator('#feedback-toggle').count()==0
     assert page.locator('#replace-photo').count()==0
     assert page.locator('#view-arrows').count()==0
     no_overflow(page,['#landing'])
     for w,h in VIEWPORTS:
         page.set_viewport_size({'width':w,'height':h});no_overflow(page,['#landing','.landing-eyebrow','#landing-title','.landing-marks'])
+        assert page.locator('#experience').evaluate('(e)=>e.clientWidth===innerWidth')
     page.set_viewport_size({'width':390,'height':844})
     page.locator('#enter').tap();page.locator('#home').wait_for(state='visible')
     for w,h in VIEWPORTS:
@@ -77,7 +81,9 @@ with sync_playwright() as p:
     page.mouse.up()
     assert len(set(changes))>1,changes
     assert not page.evaluate('Boolean(window.unexpectedPickerClick)')
-    upload(page,160,240)
+    with page.expect_file_chooser() as picker:page.locator('#choose-photo').tap()
+    picker.value.set_files({'name':'palette.png','mimeType':'image/png','buffer':png(160,240)})
+    page.locator('#photo').wait_for(state='visible')
     assert page.locator('#photo .logo-bar, #photo .credits, #save-notice').count()==0
     # Portrait, landscape, and very tall photos remain unwarped with the action below.
     for width,height in [(160,240),(400,100),(80,1600)]:
@@ -95,6 +101,8 @@ with sync_playwright() as p:
     box=page.locator('#archive-status').bounding_box();assert box['width']<=1 and box['height']<=1
     current=page.locator('#result-preview').get_attribute('src')
     page.wait_for_function('(src)=>document.querySelector("#result-preview").src!==src',arg=current,timeout=1500)
+    type_center=page.evaluate('''()=>{const text=exportSVGs.find(s=>s.includes('data-layer="poster-typography"'));const parsed=new DOMParser().parseFromString(text,'image/svg+xml');const svg=document.importNode(parsed.documentElement,true);svg.style.cssText='position:fixed;left:-10000px;visibility:hidden';document.body.append(svg);try{const g=svg.querySelector('[data-layer="poster-typography"]'),r=g.getBBox(),m=g.transform.baseVal.consolidate().matrix,p=new DOMPoint(r.x+r.width/2,r.y+r.height/2).matrixTransform(m);return{x:p.x,y:p.y};}finally{svg.remove();}}''')
+    assert abs(type_center['x']-201)<.01 and abs(type_center['y']-391.25)<.01,type_center
     assert page.evaluate('document.fonts.check(\'25px "Panchi Mono"\')')
     assert any('Panchi Mono' in x['font'] and len(x['text'])==10 for x in page.evaluate('dateCalls'))
     assert page.evaluate('feedbackCalls.length')>0
@@ -153,10 +161,20 @@ with sync_playwright() as p:
     page.wait_for_function('document.querySelectorAll(".archive-card").length===31')
     ids=page.locator('.archive-card').evaluate_all('es=>es.map(e=>e.dataset.recordId)');assert len(set(ids))==31
     assert ids[1:]==['00000000-0000-4000-8000-'+str(i).zfill(12) for i in range(1,31)]
+    neighbors=page.evaluate('id=>trajectoryArchive.localNeighbors(id)',ids[18])
+    assert neighbors=={'previous':ids[17],'next':ids[19]},neighbors
     assert page.locator('#gallery-scroll').evaluate('e=>e.scrollHeight>e.clientHeight')
     selected=page.locator('.archive-card').nth(18);selected.scroll_into_view_if_needed()
     before=page.locator('#gallery-scroll').evaluate('e=>e.scrollTop');selected.tap()
     page.locator('#record-images').wait_for(state='visible')
+    assert page.locator('#record figcaption, #record-download-arrows, #record-download-poster').count()==0
+    assert page.locator('#record-description').inner_text()==''
+    page.wait_for_function('!document.querySelector("#record-next").disabled')
+    current=page.url;page.locator('#record-next').tap();page.wait_for_url('**/#result/'+ids[19])
+    page.wait_for_function('!document.querySelector("#record-prev").disabled')
+    page.locator('#record-prev').tap();page.wait_for_url(current)
+    palette_colors=['rgb(0, 153, 255)','rgb(255, 0, 149)','rgb(200, 0, 255)','rgb(80, 141, 71)','rgb(184, 163, 145)','rgb(198, 199, 201)','rgb(250, 193, 25)','rgb(117, 50, 69)']
+    assert page.locator('#record').evaluate('(e)=>getComputedStyle(e).backgroundColor') in palette_colors
     page.locator('#record [data-action="archive"]').tap();page.locator('#gallery').wait_for(state='visible')
     assert page.locator('.archive-card').count()==31
     assert abs(page.locator('#gallery-scroll').evaluate('e=>e.scrollTop')-before)<1
@@ -167,8 +185,8 @@ with sync_playwright() as p:
     # Old private result links remain usable without reintroducing My Trajectory into the new flow.
     page.set_viewport_size({'width':390,'height':844});page.goto(BASE+'/#result/'+stored)
     page.locator('#record-images').wait_for(state='visible')
-    with page.expect_download() as dl:page.locator('#record-download-poster').click()
-    poster=assert_png(dl.value);assert poster!=arrows
+    assert page.locator('#record-download-poster').count()==0
+    assert page.locator('#record-photo').evaluate('(img)=>img.decode().then(()=>img.naturalWidth>0)')
     page.emulate_media(reduced_motion='reduce');page.goto(BASE+'/#home');upload(page)
     page.locator('#create').click();page.locator('#finish').wait_for(state='visible')
     src=page.locator('#result-preview').get_attribute('src');page.wait_for_timeout(950)
@@ -192,7 +210,14 @@ with sync_playwright() as p:
     native.add_init_script('''window.shareCalls=[];Object.defineProperty(navigator,'canShare',{value:({files})=>files.length===2});Object.defineProperty(navigator,'share',{configurable:true,writable:true,value:async value=>{shareCalls.push({active:navigator.userActivation.isActive,files:value.files.map(f=>({name:f.name,size:f.size,type:f.type}))});}});''')
     phone=native.new_page();phone.on('pageerror',lambda e:errors.append(str(e)))
     with phone.expect_response('**/assets/back-arrows.json') as response:phone.goto(BASE+'/#home')
-    response.value.body();upload(phone)
+    response.value.body()
+    phone.locator('#home .info-button').tap()
+    phone.wait_for_function('document.querySelector("audio[data-feedback]").currentTime>0')
+    media=phone.locator('audio[data-feedback]').evaluate('(e)=>({muted:e.muted,volume:e.volume,error:e.error?.code,elapsed:e.currentTime})')
+    assert not media['muted'] and media['volume']>0 and media['error'] is None and media['elapsed']>0,media
+    phone.locator('#close-info').tap();phone.locator('#home').wait_for(state='visible')
+    assert phone.locator('audio[data-feedback]').count()==1
+    upload(phone)
     back=phone.locator('#photo .back-button');phone.wait_for_function('document.querySelector("#photo .back-button").dataset.arrow!==undefined')
     shapes=[]
     for i in range(8):

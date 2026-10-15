@@ -19,7 +19,7 @@ def upload(page,data=None):page.locator('#library-file').set_input_files({'name'
 def assert_png(download):
     content=Path(download.path()).read_bytes()
     assert content[:8]==b'\x89PNG\r\n\x1a\n'
-    assert struct.unpack('>II',content[16:24])==(1206,1560)
+    assert struct.unpack('>II',content[16:24])==(1200,1500)
     return content
 
 if __name__=='__main__':

@@ -14,13 +14,6 @@
 }
 @font-face {
   font-family: "KoPubWorld Batang";
-  src: url("assets/fonts/KoPubWorldBatang-Light.woff2") format("woff2");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "KoPubWorld Batang";
   src: url("assets/fonts/KoPubWorldBatang-Medium.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
@@ -49,10 +42,10 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   font-family: var(--ko);
-  font-weight: 300;
+  font-weight: 500;
   font-synthesis: none;
   color: #231815;
-  background: #dcdcdc;
+  background: var(--paper);
   color-scheme: light;
 }
 @supports (height: 100dvh) {
@@ -105,7 +98,7 @@ i {
   font-style: italic;
 }
 #experience {
-  width: min(100%, 480px);
+  width: 100%;
   height: var(--view-height);
   margin: 0 auto;
   background: var(--paper);
@@ -366,7 +359,7 @@ i {
   transform: scale(0.985);
 }
 .create-area .color-button {
-  width: 50%;
+  width: min(50%, 240px);
   height: var(--action-height);
 }
 .back-button {
@@ -401,8 +394,9 @@ i {
 }
 .finish-actions {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 50%;
+  width: min(100%, 720px);
+  transform: translateX(-50%);
   bottom: max(4%, var(--safe-bottom));
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -465,7 +459,7 @@ i {
   right: 7.2%;
   bottom: max(4%, var(--safe-bottom));
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.8;
   word-break: keep-all;
   transform-origin: top left;
   text-align: justify;
@@ -477,7 +471,7 @@ i {
 }
 .info-copy [lang="en"] {
   margin-top: 36px;
-  line-height: 1.3;
+  line-height: 1.65;
   word-break: normal;
   font-style: normal;
   text-justify: inter-word;
@@ -629,7 +623,7 @@ i {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
 }
 .record-screen figure {
@@ -646,25 +640,19 @@ i {
   flex: 1;
   object-fit: contain;
 }
-.record-screen figcaption {
-  font-size: 10px;
-  flex-shrink: 0;
+.record-navigation {
   display: flex;
   justify-content: space-between;
+  flex-shrink: 0;
+  gap: 12px;
 }
-.record-downloads {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.record-navigation button {
+  min-width: 100px;
 }
-.record-downloads .color-button {
-  font-size: 12px;
-  min-height: 50px;
-  padding: 8px;
-}
-.record-downloads i {
-  font-size: 12px;
+#gallery,
+#record {
+  background: var(--archive-background, var(--paper));
+  color: var(--archive-ink, #231815);
 }
 .error-toast {
   position: fixed;
@@ -771,7 +759,7 @@ dialog .text-button {
 @media (max-height: 700px) {
   .info-copy {
     font-size: 13px;
-    line-height: 1.4;
+    line-height: 1.7;
   }
   .info-copy p {
     margin-bottom: 16px;
@@ -810,6 +798,7 @@ dialog .text-button {
     gap: 22px;
     top: max(16%, 52px);
     font-size: 11px;
+    line-height: 1.7;
   }
   .info-copy [lang="en"] {
     margin-top: 0;
@@ -866,8 +855,25 @@ dialog .text-button {
   }
 }
 @media (min-width: 600px) {
-  #experience {
-    box-shadow: 0 8px 60px #0001;
+  .info-copy {
+    left: max(7.2%, calc((100% - 720px) / 2));
+    right: max(7.2%, calc((100% - 720px) / 2));
+  }
+  .landing-eyebrow {
+    font-size: 14px;
+  }
+  .logo-bar {
+    max-width: 700px;
+    margin-inline: auto;
+  }
+  #photo-preview {
+    max-width: 100%;
+  }
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  .record-screen {
+    padding-inline: max(20px, calc((100% - 1100px) / 2));
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -893,8 +899,9 @@ dialog .text-button {
 .landing-marks {
   position: absolute;
   bottom: max(2.5%, var(--safe-bottom));
-  left: 25%;
-  width: 50%;
+  left: 50%;
+  width: min(50%, 240px);
+  transform: translateX(-50%);
   height: auto;
   pointer-events: none;
 }

@@ -85,8 +85,9 @@ with sync_playwright() as p:
     result_url=page.url
     other=browser.new_context(viewport={'width':390,'height':844});fixture(other,data)
     viewer=other.new_page();viewer.on('pageerror',lambda e:errors.append(str(e)))
+    prior_lists=data['lists']
     viewer.goto(BASE+'/#archive');viewer.locator('.archive-card').first.wait_for()
-    assert viewer.locator('.archive-card').count()==1 and data['lists']==1
+    assert viewer.locator('.archive-card').count()==1 and data['lists']>prior_lists
     viewer.locator('.archive-card').click();viewer.locator('#record-images').wait_for(state='visible')
     assert viewer.url==result_url
     for selector in ['#record-photo','#record-arrows']:
@@ -114,6 +115,22 @@ with sync_playwright() as p:
     refresh_page=refresh_context.new_page();refresh_page.goto(BASE+'/#home')
     refresh_page.evaluate('''async()=>{const blob=new Blob(['test'],{type:'image/png'});await trajectoryArchive.onlineSave({id:'00000000-0000-4000-8000-000000000001',createdAt:new Date().toISOString(),photo:new Blob(['photo'],{type:'image/jpeg'}),arrows:blob,poster:blob});}''')
     assert data['refresh']==1 and data['signup']==1 and data['writes']==3
+    # Direct links to older posts find adjacent IDs through the existing bounded public RPC.
+    from datetime import datetime,timedelta,timezone
+    deep=new_fixture();deep['fail']=False
+    ordered=[]
+    for i in range(70):
+        id='20000000-0000-4000-8000-'+str(i).zfill(12);ordered.append(id)
+        deep['documents'][id]={'id':id,'owner_id':OWNER,'captured_at':(datetime(2026,10,15,tzinfo=timezone.utc)+timedelta(seconds=70-i)).isoformat(),'ready':True,'photo_path':f'{OWNER}/{id}/photo.jpg','arrows_path':f'{OWNER}/{id}/arrows.png','poster_path':f'{OWNER}/{id}/poster.png'}
+    deep_context=browser.new_context();fixture(deep_context,deep)
+    deep_page=deep_context.new_page();deep_page.goto(BASE+'/#home')
+    for i in [0,23,24,65,69]:
+        before=deep['lists']
+        neighbors=deep_page.evaluate('row=>trajectoryArchive.onlineNeighbors({id:row.id,createdAt:row.captured_at})',deep['documents'][ordered[i]])
+        assert neighbors=={'previous':ordered[i-1] if i else None,'next':ordered[i+1] if i<69 else None},(i,neighbors)
+        assert deep['lists']-before<20
+    assert deep['signup']==0 and deep['writes']==0
+    deep_context.close()
     # A malicious/mismatched RPC path is never used as an image URL.
     first_id=next(iter(data['documents']))
     data['documents'][first_id]['photo_path']='https://evil.example/photo.jpg'

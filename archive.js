@@ -83,6 +83,33 @@
       };
     });
   }
+  async function localNeighbors(id) {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+      const req = db
+        .transaction(STORE)
+        .objectStore(STORE)
+        .index("createdAt")
+        .openKeyCursor(null, "prev");
+      let previous = null,
+        found = false;
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) {
+          resolve({ previous: found ? previous : null, next: null });
+          return;
+        }
+        if (found) {
+          resolve({ previous, next: cursor.primaryKey });
+          return;
+        }
+        if (cursor.primaryKey === id) found = true;
+        else previous = cursor.primaryKey;
+        cursor.continue();
+      };
+    });
+  }
   function baseURL() {
     if (!configured()) throw new Error("supabase/not-configured");
     const url = new URL(config().url);
@@ -323,13 +350,62 @@
     });
     return { items, hasMore: rows.length > limit };
   }
+  async function onlineNeighbors(record) {
+    const first = await onlineList(0, 24);
+    let index = first.items.findIndex((row) => row.id === record.id);
+    if (index >= 0) {
+      const next =
+        first.items[index + 1]?.id ||
+        (first.hasMore ? (await onlineList(24, 1)).items[0]?.id : null);
+      return {
+        previous: first.items[index - 1]?.id || null,
+        next: next || null,
+      };
+    }
+    if (!first.hasMore) return { previous: null, next: null };
+    const compare = (row) => {
+      const date = Date.parse(row.createdAt) - Date.parse(record.createdAt);
+      if (date) return date > 0 ? -1 : 1;
+      return row.id === record.id ? 0 : row.id > record.id ? -1 : 1;
+    };
+    // Existing public RPC supports bounded offsets: find older direct links without downloading the entire archive.
+    let low = 24,
+      high = 48;
+    while (true) {
+      const row = (await onlineList(high, 1)).items[0];
+      if (!row || compare(row) > 0) break;
+      if (compare(row) === 0) {
+        index = high;
+        break;
+      }
+      if (high === 100000) return { previous: null, next: null };
+      low = high + 1;
+      high = Math.min(100000, high * 2);
+    }
+    while (index < 0 && low <= high) {
+      const mid = Math.floor((low + high) / 2),
+        row = (await onlineList(mid, 1)).items[0];
+      if (!row || compare(row) > 0) high = mid - 1;
+      else if (compare(row) < 0) low = mid + 1;
+      else index = mid;
+    }
+    if (index < 0) return { previous: null, next: null };
+    const nearby = (await onlineList(Math.max(0, index - 1), 3)).items;
+    const current = nearby.findIndex((row) => row.id === record.id);
+    return {
+      previous: nearby[current - 1]?.id || null,
+      next: current < 0 ? null : nearby[current + 1]?.id || null,
+    };
+  }
   window.trajectoryArchive = {
     configured,
     localSave,
     localGet,
     localList,
+    localNeighbors,
     onlineSave,
     onlineGet,
     onlineList,
+    onlineNeighbors,
   };
 })();
