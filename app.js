@@ -346,6 +346,8 @@
   }
   function paintInteraction(button) {
     if (button.matches(".info-button, a")) return;
+    // Keep Delete legible against the archive surface, including during a tap.
+    if (button.classList.contains("delete-button")) return;
     const color = differentColor(
       button.dataset.lastColor,
       button.matches(".back-button, .arrow-button") &&
@@ -364,10 +366,6 @@
         .match(/../g)
         .map((v) => parseInt(v, 16))
         .join(" ")} / ${color.opacity})`;
-      return;
-    }
-    if (button.classList.contains("delete-button")) {
-      button.style.color = cssColor(color);
       return;
     }
     if (button.classList.contains("vertical-action")) {
@@ -592,6 +590,10 @@
       document.documentElement.style.setProperty(
         "--archive-ink",
         ink({ ...color, opacity: 1 }),
+      );
+      document.documentElement.style.setProperty(
+        "--delete-ink",
+        ink({ ...color, opacity: 1 }) === "#ffffff" ? "#ffffff" : "#000000",
       );
     }
     updatePageSurface();
@@ -1505,6 +1507,9 @@
     $("delete-record").hidden =
       !archive.canDelete(record) || saving || state.deleting;
   }
+  addEventListener("trajectory-session-change", updateDeleteButton);
+  addEventListener("pageshow", updateDeleteButton);
+  addEventListener("focus", updateDeleteButton);
   let deletionTarget = null;
   $("delete-record").addEventListener("click", () => {
     const record = state.viewedRecord;
