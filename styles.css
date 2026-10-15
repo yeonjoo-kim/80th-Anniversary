@@ -498,6 +498,8 @@ i {
   line-height: 1.65;
   word-break: normal;
   font-style: normal;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   text-justify: inter-word;
   hyphenate-limit-chars: 6 3 3;
 }
@@ -1019,15 +1021,15 @@ dialog .text-button {
     object-position: left top;
   }
   .info-copy {
-    left: max(var(--page-x), calc((100% - 1280px) / 2));
-    right: max(var(--page-x), calc((100% - 1280px) / 2));
+    left: max(var(--page-x), calc((100% - 960px) / 2));
+    right: max(var(--page-x), calc((100% - 960px) / 2));
     top: max(17dvh, calc(var(--page-top) + var(--back-size) + 16px));
     bottom: var(--page-bottom);
     display: grid;
     grid-template-columns: 1fr 1fr;
     align-content: start;
     gap: clamp(28px, 4vw, 72px);
-    font-size: clamp(15px, min(1.8vw, 3dvh), 32px);
+    font-size: clamp(18px, 1.4vw, 24px);
     line-height: 1.8;
   }
   .info-copy p,
@@ -1293,7 +1295,7 @@ html[data-screen="home"] #home {
   .info-copy {
     top: max(15dvh, calc(var(--page-top) + var(--back-size) + 20px));
     bottom: var(--page-bottom);
-    font-size: clamp(18px, 1.8vw, 32px);
+    font-size: clamp(18px, 1.4vw, 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;

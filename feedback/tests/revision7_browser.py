@@ -34,7 +34,7 @@ with sync_playwright() as p:
     offline(context)
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(BASE);page.locator('#landing-art svg').wait_for();page.evaluate('document.fonts.ready')
-    assert page.locator('html').get_attribute('data-revision')=='11'
+    assert page.locator('html').get_attribute('data-revision')=='12'
     for w,h in [(320,480),(390,650),(390,844),(430,932),(844,390),(1024,768),(1440,900),(1920,1080)]:
         page.set_viewport_size({'width':w,'height':h})
         page.wait_for_timeout(40)
