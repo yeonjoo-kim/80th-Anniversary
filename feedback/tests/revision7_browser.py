@@ -133,12 +133,12 @@ with sync_playwright() as p:
     pc.locator('#library-file').set_input_files({'name':'palette.png','mimeType':'image/png','buffer':png()});pc.locator('#create').click();pc.locator('#finish').wait_for(state='visible')
     # Fin.svg source rectangles: 201 × 85, rx=20. Test actual laid-out shape,
     # including minimum desktop windows, mobile layouts and active status text.
-    for w,h in [(320,480),(390,844),(500,500),(500,780),(900,780),(1024,768),(1440,900),(1920,1080)]:
+    for w,h in [(320,480),(390,844),(500,500),(500,780),(900,780),(844,390),(1024,768),(1440,900),(1920,1080)]:
         pc.set_viewport_size({'width':w,'height':h})
         for button in pc.locator('.finish-actions .color-button').all():
             b=button.bounding_box();assert abs(b['width']/b['height']-201/85)<.002,b
         pc.locator('#download').click()
-        for message in ['', '이미지를 준비하고 있어요…']:
+        for message in ['', '이미지를 준비하고 있어요…', '공유 메뉴를 닫았습니다. 사진 앱에서 저장 여부를 확인해 주세요.', '이미지 2장 다운로드를 요청했습니다.', '저장을 취소했습니다. 다시 선택할 수 있어요.']:
             pc.locator('#download-status').evaluate('(e,text)=>e.textContent=text',message)
             d=box(pc,'#download-dialog');assert d['y']>=-1 and d['y']+d['height']<=h+1,d
             assert pc.locator('#download-dialog').evaluate('e=>e.scrollHeight<=e.clientHeight+1')

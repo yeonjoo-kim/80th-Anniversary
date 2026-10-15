@@ -1334,14 +1334,14 @@ html[data-screen="home"] #home {
   height: auto;
 }
 #download-dialog {
-  /* Four 201:85 buttons + 30px gaps + 64px padding; reserve 40px for status. */
+  /* Four 201:85 buttons + 30px gaps + 64px padding; reserve 56px for status. */
   width: min(
     580px,
     calc(100vw - 32px),
     calc(
       (
           var(--view-height) - max(16px, var(--safe-top)) -
-            max(16px, var(--safe-bottom)) - 134px
+            max(16px, var(--safe-bottom)) - 150px
         ) *
         201 / 340 + 44px
     )
@@ -1377,4 +1377,9 @@ html[data-screen="home"] #home {
 
 #download-dialog .color-button i {
   font-size: inherit;
+}
+
+#download-status {
+  margin: 0;
+  line-height: 1.25;
 }
