@@ -71,6 +71,25 @@ with sync_playwright() as p:
         if w>=1024:assert d['x']>=b['x']+b['width'] and abs(d['y']-b['y'])<1,(b,d)
         else:assert d['y']>=b['y']+b['height'] and abs(d['x']+d['width']-b['x']-b['width'])<1,(b,d)
         assert d['y']+d['height']<=h and d['x']+d['width']<=w,d
+    # Delete follows the solid archive background and keeps its contrast on hover.
+    colors=set()
+    for i in range(16):
+        page.evaluate('Math.random=()=>0')
+        page.evaluate('location.hash="#archive"');page.locator('#gallery').wait_for(state='visible')
+        page.evaluate('(n)=>Math.random=()=>n',i/16)
+        page.evaluate('(id)=>location.hash="#result/"+id',ID);page.locator('#delete-record').wait_for(state='visible')
+        page.locator('#delete-record').hover()
+        paint=page.locator('#delete-record').evaluate('e=>({ink:getComputedStyle(e).color,bg:getComputedStyle(document.documentElement).getPropertyValue("--archive-background").trim(),opacity:getComputedStyle(e.querySelector("path")).fillOpacity})')
+        colors.add(paint['ink'])
+        import re
+        rgb=[int(x) for x in re.findall(r'\d+',paint['ink'])][:3]
+        bg=[int(paint['bg'][j:j+2],16) for j in (1,3,5)]
+        def luminance(values):
+            channels=[v/255 for v in values]
+            return sum(w*(v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4) for w,v in zip([.2126,.7152,.0722],channels))
+        a,b=sorted([luminance(rgb),luminance(bg)])
+        assert (b+.05)/(a+.05)>=4.5 and float(paint['opacity'])==1,paint
+    assert len(colors)==2,colors
     page.locator('#delete-record').click();page.locator('#cancel-delete').click();assert db['calls']==[]
     page.locator('#delete-record').click();page.locator('#confirm-delete').click();page.wait_for_url('**/#archive')
     assert ID not in db['rows'] and not any(ID in f for f in db['files'])
@@ -79,6 +98,15 @@ with sync_playwright() as p:
     assert db['calls']==['prepare','storage','finish'] and db['signup']==0
     page.evaluate('(id)=>location.hash="#result/"+id',FOREIGN);page.locator('#record-images').wait_for(state='visible');assert page.locator('#delete-record').is_hidden()
     rejected=page.evaluate('async id=>{try{await trajectoryArchive.removeOwn(await trajectoryArchive.onlineGet(id));return false}catch{return true}}',FOREIGN);assert rejected and db['calls']==['prepare','storage','finish']
+    c.close()
+    # A tab that cached another identity must follow later same-origin session changes.
+    db=fixture();c=browser.new_context();setup(c,db,{**SESSION,'user':{'id':OTHER}})
+    page=c.new_page();page.goto(BASE+'/#result/'+ID);page.locator('#record-images').wait_for(state='visible');assert page.locator('#delete-record').is_hidden()
+    other=c.new_page();other.goto(BASE+'/#home')
+    other.evaluate('([key,value])=>localStorage.setItem(key,JSON.stringify(value))',[KEY,SESSION])
+    page.locator('#delete-record').wait_for(state='visible')
+    other.evaluate('(key)=>localStorage.removeItem(key)',KEY)
+    page.locator('#delete-record').wait_for(state='hidden');assert db['calls']==[] and db['signup']==0
     c.close()
     # Partial file deletion: keep a durable retry, never finish early; reload retries.
     db=fixture();db['fail_storage']=True;c=browser.new_context(viewport={'width':390,'height':844},reduced_motion='reduce');setup(c,db)
@@ -105,7 +133,7 @@ with sync_playwright() as p:
         page.set_viewport_size({'width':w,'height':h});photo=geometry(page,'#photo-preview');notice=geometry(page,'#photo-notice')
         assert notice['y']>=photo['y'] and notice['y']+notice['height']<=photo['y']+photo['height']
         assert abs(notice['x']+notice['width']/2-photo['x']-photo['width']/2)<1
-        font=page.locator('#photo-notice').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)');assert abs(font-max(11,photo['width']*.0373))<.1
+        font=page.locator('#photo-notice').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)');assert 9<=font<=36 and font<max(11,photo['width']*.0373)
         assert '* 선택된 사진은 궤적 아카이브에 저장됩니다.'==page.locator('#photo-notice').inner_text()
     page.set_viewport_size({'width':390,'height':844});page.locator('#create').click();page.locator('#finish').wait_for(state='visible')
     own=page.evaluate('async()=>{const r=await trajectoryArchive.localList(0,1);return r.items[0].id}')

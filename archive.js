@@ -6,7 +6,7 @@
   const SESSION_KEY = "trajectory-supabase-session-v1";
   const UUID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  let databasePromise, authPromise, session;
+  let databasePromise, authPromise, session, storedSessionValue;
   const saving = new Set();
   const config = () => window.SUPABASE_CONFIG;
   const configured = () =>
@@ -181,26 +181,35 @@
       user: { id: value.user.id },
     };
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      const value = JSON.stringify(session);
+      localStorage.setItem(SESSION_KEY, value);
+      storedSessionValue = value;
     } catch {}
     return session;
   }
+  function readSession() {
+    try {
+      const value = localStorage.getItem(SESSION_KEY);
+      if (value !== storedSessionValue) {
+        session = JSON.parse(value);
+        storedSessionValue = value;
+      }
+    } catch {}
+    return session;
+  }
+  addEventListener("storage", (event) => {
+    if (event.key !== SESSION_KEY && event.key !== null) return;
+    readSession();
+    dispatchEvent(new Event("trajectory-session-change"));
+  });
   function currentUserId() {
-    if (!session) {
-      try {
-        session = JSON.parse(localStorage.getItem(SESSION_KEY));
-      } catch {}
-    }
+    readSession();
     return UUID.test(session?.user?.id) ? session.user.id : null;
   }
   async function authenticatedSession({ create = true } = {}) {
     if (authPromise) return authPromise;
     authPromise = (async () => {
-      if (!session) {
-        try {
-          session = JSON.parse(localStorage.getItem(SESSION_KEY));
-        } catch {}
-      }
+      readSession();
       if (
         session?.access_token &&
         UUID.test(session.user?.id) &&
